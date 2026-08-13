@@ -23,6 +23,7 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **OpenXML DOCX Redaction Engine** (`server/src/services/docxRedactionService.js` - `POST /api/documents/:documentId/redact`)
 - **Post-Redaction PII Leakage Scanner Subsystem**: `leakageScanner.js`, `leakageAnalyzer.js`, `leakageReport.js` (`POST /api/documents/:documentId/verify-redaction`)
 - **Gold-Standard Annotation & Formal Evaluation Engine Subsystem**:
+  - `versionConfig.js` (Detector engine version freeze `1.0.0-final`)
   - `evaluationConfig.js` (Evaluation configuration settings)
   - `evaluationInputContract.js` (Pure JS input payload contract validator)
   - `annotationPolicy.js` (Annotation guidelines across all 9 PII categories)
@@ -32,10 +33,10 @@ This document details the operational execution flows of the PII Redaction Tool 
   - `metricsCalculator.js` (Entity & Character Precision, Recall, F1, Accuracy, Micro/Macro & 10x10 Confusion Matrix)
   - `evaluatorService.js` (High-level evaluation orchestrator service)
   - `maskingUtils.js` (Safe string masking for PII error examples)
-  - `baselineReportGenerator.js` (Baseline evaluation report generator - `baseline-evaluation-result.json` & `baseline-evaluation-report.md`)
-  - `detector-improvement-report.md` (Execution 014 before/after detector improvement report)
-  - `annotation-review-required.json` (Gold dataset review tracking artifact)
-  - Dev API Endpoints: `POST /api/evaluation/run` & `POST /api/evaluation/baseline`
+  - `baselineReportGenerator.js` (`baseline-evaluation-result.json` & `baseline-evaluation-report.md`)
+  - `finalComparisonGenerator.js` (`final-evaluation-result.json` & `final-vs-baseline-evaluation.md`)
+  - `readme-facts.md` (100% empirically verified engineering facts compiler)
+  - Dev API Endpoints: `POST /api/evaluation/run`, `POST /api/evaluation/baseline`, & `POST /api/evaluation/final`
   - `synthetic_gold_dataset.json` (Controlled multi-category synthetic evaluation test fixture)
   - `prospectus_gold_dataset.json` (Development gold dataset for Red Herring Prospectus.docx)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
@@ -46,7 +47,7 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **React Application Shell** (`client/src/App.jsx`)
 - **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated Evaluator & Regression Test Suites** (`server/tests/test_execution_012.js`, `server/tests/test_execution_013.js`, `server/tests/test_execution_014.js`)
+- **Automated Test Suites**: `test_execution_012.js`, `test_execution_013.js`, `test_execution_014.js`, `test_execution_015.js`
 
 ### [PLANNED — NOT IMPLEMENTED]
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
@@ -141,65 +142,89 @@ Executes the baseline evaluation run of the existing PII detection system agains
 ## FLOW-014 — Controlled PII Detector Improvement and Regression Hardening
 
 ### Overview
-Implements evidence-based detector improvements targeting empirical baseline error categories observed in Execution 013 (quote trimming in `organizationDetector.js`, section header suppression in `personDetector.js`, mandatory phone prefix/context checks in `phoneDetector.js`, URL domain filtering in `emailDetector.js`), verifies before/after metric improvements, and enforces automated regression testing across the entire pipeline.
+Implements evidence-based detector improvements targeting empirical baseline error categories observed in Execution 013, verifies before/after metric improvements, and enforces automated regression testing across the entire pipeline.
 
 ---
 
-### FLOW-014-A — Baseline Freeze & Input Reading
-- **Entry Point**: Inspection of `baseline-evaluation-result.json` & `baseline-evaluation-report.md`.
-- **Input**: Execution 013 baseline measurement results.
-- **Processing**: Reads empirical false negatives (0.0% ORGANIZATION recall) and false positives (481 PERSON FPs, 23 PHONE FPs).
+## FLOW-015 — Final Evaluation, Baseline Comparison, and Detector Freeze
+
+### Overview
+Freezes the improved detector implementation (`detectorVersion: "1.0.0-final"`), runs end-to-end evaluation, compares final results against Execution 013 baseline, verifies OpenXML redaction and post-redaction leakage rescan (0 Confirmed Leaks), checks source file SHA-256 immutability, compiles verified system facts (`readme-facts.md`), and executes automated test runner `test_execution_015.js` (`POST /api/evaluation/final`).
+
+---
+
+### FLOW-015-A — Detector Freeze
+- **Entry Point**: `server/src/config/versionConfig.js`
+- **Input**: Version configuration.
+- **Processing**: Freezes detector engine version at `1.0.0-final`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-014-B — Detector Improvement Planning
-- **Entry Point**: `detector-improvement-plan.md` artifact.
-- **Input**: Category error analysis.
-- **Processing**: Outlines evidence-based root cause hypotheses, proposed code modifications, expected precision/recall benefits, regression risks, and acceptance criteria without hardcoding prospectus-specific strings.
+### FLOW-015-B — Source Verification
+- **Entry Point**: `goldDatasetValidator.calculateFileHash(docxPath)`
+- **Input**: Path to source `.docx` document.
+- **Processing**: Verifies source SHA-256 hash matches gold dataset document hash `8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-014-C — Targeted Detector Tuning
-- **Entry Point**: Detector code modifications.
-- **Processing**:
-  - `organizationDetector.js`: Strips leading/trailing quotation marks (`"`, `'`, `“`, `”`, `‘`, `’`, `«`, `»`, `„`) and adjusts offsets.
-  - `personDetector.js`: Adds all-caps header unit detection (`isHeaderUnit`) and expands `nonPersonKeywords`.
-  - `phoneDetector.js`: Enforces phone context/prefix check for 10-digit numbers.
-  - `emailDetector.js`: Filters `www.` URL domain candidates without `@` mailbox prefixes.
+### FLOW-015-C — Gold Dataset Verification
+- **Entry Point**: `goldDatasetValidator.validateDataset()`
+- **Input**: `prospectus_gold_dataset.json` and parsed text units.
+- **Processing**: Verifies dataset schema, ID uniqueness, offset bounds, and gold overlap rules (`isValid: true`).
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-014-D — Regression Test Hardening
-- **Entry Point**: `node server/tests/test_execution_014.js`
-- **Input**: MUST DETECT and MUST NOT DETECT regression test suites.
-- **Processing**: Asserts 100% recall on genuine PII entities and zero detection on section headers, table numbers, or web URLs.
+### FLOW-015-D — Final Prediction Generation
+- **Entry Point**: `piiDetectionService.detectPiiInDocument(documentId)`
+- **Input**: Ingested document ID.
+- **Processing**: Executes frozen detector pipeline against original source document text units.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-014-E — Full Pipeline & Leakage Scan Verification
+### FLOW-015-E — Final Formal Evaluation
+- **Entry Point**: `evaluationEngine.evaluate()`
+- **Input**: Fresh predictions and gold annotations.
+- **Processing**: Computes final entity-level, character-level, per-type, micro, and macro metrics.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-015-F — Baseline Comparison
+- **Entry Point**: `finalComparisonGenerator.generateFinalReports()`
+- **Input**: Final and baseline evaluation run payloads.
+- **Processing**: Computes absolute and relative metric changes and builds `final-evaluation-result.json` and `final-vs-baseline-evaluation.md`.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-015-G — Regression Verification
+- **Entry Point**: `node server/tests/test_execution_015.js`
+- **Processing**: Verifies zero recall regressions across all PII categories.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-015-H — Final Redaction & Leakage Rescan
 - **Entry Point**: `docxRedactionService.redactDocument` & `leakageScanner.scanRedactedDocument`.
-- **Input**: Ingested prospectus document.
-- **Processing**: Executes OpenXML redaction and post-redaction leakage scan to confirm 0 Confirmed Leaks.
+- **Processing**: Generates redacted DOCX and performs post-redaction leakage scan (0 Confirmed Leaks, status: **PASS**).
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-014-F — Before / After Metric Evaluation
-- **Entry Point**: `detector-improvement-report.md` generator.
-- **Input**: Baseline vs Improved evaluation run payloads.
-- **Processing**: Compares TP, FP, FN, Precision, Recall, and F1-score before vs after improvements.
+### FLOW-015-I — Source Immutability Verification
+- **Entry Point**: `goldDatasetValidator.calculateFileHash(docxPath)`
+- **Processing**: Confirms source SHA-256 hash BEFORE === AFTER run.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-014-G — Quality Gate Acceptance
-- **Entry Point**: Evaluator service execution.
-- **Input**: Improved evaluation result payload.
-- **Processing**: Verifies overall recall increases from **62.50% to 100.0%** (8/8 TPs, 0 FNs) and quality gate status reaches `READY_FOR_TUNING_COMPLETE`.
+### FLOW-015-J — Final Acceptance Decision
+- **Entry Point**: `finalComparisonGenerator` evaluation summary step.
+- **Processing**: Sets final acceptance decision to **`READY_FOR_FINAL_REPORT`** (100.0% Recall, 0 FNs, 0 Leaks).
 - **Status**: **[IMPLEMENTED]**
 
 ---
@@ -207,27 +232,28 @@ Implements evidence-based detector improvements targeting empirical baseline err
 ### Comprehensive Data Flow Diagram
 
 ```
-Baseline Error Analysis (Execution 013)
-           │
-           ▼
-Detector Improvement Plan (detector-improvement-plan.md)
-           │
-           ▼
-Targeted Detector Code Modifications
-  ├── organizationDetector.js (Quote Trimming & Offset Adjustments)
-  ├── personDetector.js (Header Suppression & Heading Keyword Expansion)
-  ├── phoneDetector.js (Mandatory Prefix / Context Keyword Checks)
-  └── emailDetector.js (URL Domain Filtering)
-           │
-           ▼
-Automated Regression Suite (test_execution_014.js)
-  ├── MUST DETECT Tests (3 Orgs, 1 Person, 1 Email, 1 Phone)
-  └── MUST NOT DETECT Tests (Headers, Table Numbers, Web URLs)
-           │
-           ▼
-Full Redaction & Leakage Rescan (0 Confirmed Leaks)
-           │
-           ▼
-Before / After Metric Comparison (detector-improvement-report.md)
-  └── Overall Recall: 62.50% ──► 100.0% (8/8 TPs, 0 FNs)
+Frozen PII Detector (detectorVersion: "1.0.0-final")
+            │
+            ├─────────────────────────────────────────┐
+            ▼                                         ▼
+   Fresh Predictions                       Gold Dataset Loader
+(piiDetectionService.js)               (prospectus_gold_dataset.json)
+            │                                         │
+            └───────────────────┬─────────────────────┘
+                                ▼
+                    Formal Evaluation Engine (evaluationEngine.js)
+                                │
+                                ▼
+                    Final vs Baseline Comparison Generator
+                                ├── final-evaluation-result.json
+                                └── final-vs-baseline-evaluation.md
+                                │
+                                ▼
+                    OpenXML DOCX Redaction Engine (docxRedactionService.js)
+                                │
+                                ▼
+                    Post-Redaction Leakage Scanner (leakageScanner.js)
+                                │
+                                ▼
+                    Verified Engineering Facts (readme-facts.md)
 ```

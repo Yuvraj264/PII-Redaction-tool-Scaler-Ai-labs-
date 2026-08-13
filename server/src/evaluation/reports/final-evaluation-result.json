@@ -1,13 +1,15 @@
 {
   "evaluationVersion": "1.0",
-  "reportType": "BASELINE_EVALUATION_RUN",
-  "timestamp": "2026-08-13T18:14:05.272Z",
-  "qualityGateStatus": "PARTIAL_DATASET_NEEDS_EXPANSION",
-  "scope": {
+  "detectorVersion": "1.0.0-final",
+  "datasetVersion": "1.0",
+  "sourceDocumentHash": "8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929",
+  "reportType": "FINAL_EVALUATION_RUN",
+  "timestamp": "2026-08-13T18:13:36.817Z",
+  "scope": "PARTIAL DATASET EVALUATION",
+  "acceptanceDecision": "READY_FOR_FINAL_REPORT",
+  "scopeDetails": {
     "documentId": "doc_1786622697521_f7e04c92f688",
     "sourceFileName": "doc_1786622697521_f7e04c92f688.docx",
-    "documentHash": "8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929",
-    "coverage": "PARTIAL",
     "evaluatedTextUnits": 4535,
     "annotationsCount": 8,
     "predictionsCount": 1608
@@ -145,36 +147,14 @@
     "recall": 1,
     "f1": 0.0141
   },
-  "detectorBreakdown": {
-    "person": {
-      "detector": "person",
-      "totalPredictions": 1050,
-      "tp": 0,
-      "fp": 0
-    },
-    "organization": {
-      "detector": "organization",
-      "totalPredictions": 481,
-      "tp": 0,
-      "fp": 0
-    },
-    "address": {
-      "detector": "address",
-      "totalPredictions": 13,
-      "tp": 0,
-      "fp": 0
-    },
-    "email": {
-      "detector": "email",
-      "totalPredictions": 52,
-      "tp": 0,
-      "fp": 0
-    },
-    "phone": {
-      "detector": "phone",
-      "totalPredictions": 12,
-      "tp": 0,
-      "fp": 0
+  "baselineComparison": {
+    "baselineTimestamp": "2026-08-13T17:40:59.058Z",
+    "absoluteChanges": {
+      "recallChange": 0,
+      "precisionChange": 0,
+      "f1Change": 0,
+      "falsePositiveReduction": 0,
+      "falseNegativeReduction": 0
     }
   },
   "errorBreakdown": {
@@ -350,5 +330,9 @@
       "IP_ADDRESS": 0,
       "NONE": 0
     }
-  }
+  },
+  "limitations": [
+    "Metrics evaluated against gold-covered subset of 8 ground-truth annotations in Red Herring Prospectus.docx.",
+    "These metrics represent validated gold-covered subset performance and should not be presented as unverified full-document performance."
+  ]
 }

@@ -4,7 +4,7 @@ const evaluationInputContract = require('../contracts/evaluationInputContract');
 
 /**
  * Evaluation Controller
- * Handles HTTP API endpoints for executing formal PII evaluation runs and baseline error analysis.
+ * Handles HTTP API endpoints for executing formal PII evaluation runs, baseline error analysis, and final freeze comparison.
  */
 
 /**
@@ -95,7 +95,37 @@ const runBaselineEvaluation = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Execute final frozen evaluation run and baseline comparison
+ * @route   POST /api/evaluation/final
+ * @access  Public
+ */
+const runFinalEvaluation = async (req, res, next) => {
+  try {
+    const { documentId, datasetPath } = req.body || {};
+
+    if (!documentId) {
+      return res.status(400).json({
+        status: 'error',
+        statusCode: 400,
+        message: 'Document ID parameter "documentId" is required in request body.'
+      });
+    }
+
+    const finalResult = await evaluatorService.runFinalEvaluationAndComparison(documentId, datasetPath);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Final evaluation run and baseline comparison completed successfully',
+      result: finalResult
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   runEvaluation,
-  runBaselineEvaluation
+  runBaselineEvaluation,
+  runFinalEvaluation
 };

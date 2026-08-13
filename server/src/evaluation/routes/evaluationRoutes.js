@@ -1,5 +1,5 @@
 const express = require('express');
-const { runEvaluation, runBaselineEvaluation } = require('../controllers/evaluationController');
+const { runEvaluation, runBaselineEvaluation, runFinalEvaluation } = require('../controllers/evaluationController');
 
 const router = express.Router();
 
@@ -16,5 +16,12 @@ router.post('/run', runEvaluation);
  * @access  Public
  */
 router.post('/baseline', runBaselineEvaluation);
+
+/**
+ * @route   POST /api/evaluation/final
+ * @desc    Execute final frozen evaluation run and generate final comparison artifacts
+ * @access  Public
+ */
+router.post('/final', runFinalEvaluation);
 
 module.exports = router;

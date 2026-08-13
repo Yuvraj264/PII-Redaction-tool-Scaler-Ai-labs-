@@ -5,11 +5,12 @@ const docxParserService = require('../../services/docxParserService');
 const evaluationDatasetLoader = require('../loaders/evaluationDatasetLoader');
 const evaluationEngine = require('../engine/evaluationEngine');
 const baselineReportGenerator = require('../reports/baselineReportGenerator');
+const finalComparisonGenerator = require('../reports/finalComparisonGenerator');
 const goldDatasetValidator = require('../validators/goldDatasetValidator');
 
 /**
  * Evaluator Service
- * High-level orchestrator for executing formal evaluation runs and baseline report generation.
+ * High-level orchestrator for executing formal evaluation runs, baseline error analysis, and final freeze comparisons.
  */
 class EvaluatorService {
   /**
@@ -87,6 +88,27 @@ class EvaluatorService {
     return {
       success: true,
       message: 'Baseline evaluation run and error analysis completed successfully',
+      artifacts: {
+        jsonPath: reportArtifacts.jsonPath,
+        mdPath: reportArtifacts.mdPath
+      },
+      result: runResult
+    };
+  }
+
+  /**
+   * Executes final frozen evaluation run and writes final-evaluation-result.json and final-vs-baseline-evaluation.md
+   * @param {string} documentId - Ingested document ID
+   * @param {string} [customDatasetPath] - Optional path to custom gold dataset JSON file
+   * @returns {Object} Final comparison report paths and evaluation summary
+   */
+  async runFinalEvaluationAndComparison(documentId, customDatasetPath) {
+    const runResult = await this.evaluateDocumentRun(documentId, customDatasetPath);
+    const reportArtifacts = finalComparisonGenerator.generateFinalReports(runResult);
+
+    return {
+      success: true,
+      message: 'Final frozen evaluation and baseline comparison completed successfully',
       artifacts: {
         jsonPath: reportArtifacts.jsonPath,
         mdPath: reportArtifacts.mdPath
