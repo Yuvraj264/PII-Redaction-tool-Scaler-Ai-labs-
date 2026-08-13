@@ -82,7 +82,7 @@ const parseDocument = async (req, res, next) => {
 };
 
 /**
- * @desc    Detect PII entities (EMAIL, PHONE, IP, SSN, CREDIT_CARD) in an ingested DOCX document
+ * @desc    Detect PII entities (EMAIL, PHONE, IP, SSN, CREDIT_CARD, PERSON, ORGANIZATION, ADDRESS, DOB) in an ingested DOCX document
  * @route   POST /api/documents/:documentId/detect
  * @access  Public
  */

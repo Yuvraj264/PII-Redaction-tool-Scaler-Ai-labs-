@@ -3,11 +3,15 @@ const phoneDetector = require('../detectors/phoneDetector');
 const ipDetector = require('../detectors/ipDetector');
 const ssnDetector = require('../detectors/ssnDetector');
 const creditCardDetector = require('../detectors/creditCardDetector');
+const personDetector = require('../detectors/personDetector');
+const organizationDetector = require('../detectors/organizationDetector');
+const addressDetector = require('../detectors/addressDetector');
+const dobDetector = require('../detectors/dobDetector');
 const documentService = require('./documentService');
 
 /**
  * PII Detection Service
- * Aggregates all deterministic detectors, resolves overlapping candidate spans,
+ * Aggregates deterministic and contextual/NLP detectors, resolves overlapping candidate spans,
  * sorts entities deterministically, and maps source document location metadata.
  */
 class PiiDetectionService {
@@ -17,13 +21,39 @@ class PiiDetectionService {
       phoneDetector,
       ipDetector,
       ssnDetector,
-      creditCardDetector
+      creditCardDetector,
+      personDetector,
+      organizationDetector,
+      addressDetector,
+      dobDetector
     ];
+
+    // Priority ranking for resolving overlapping entity spans (higher = preferred)
+    this.typePriority = {
+      EMAIL: 5,
+      PHONE: 5,
+      CREDIT_CARD: 5,
+      SSN: 5,
+      IP_ADDRESS: 5,
+      DOB: 4,
+      ADDRESS: 3,
+      PERSON: 2,
+      ORGANIZATION: 1
+    };
+  }
+
+  /**
+   * Returns numeric priority for an entity type
+   * @param {string} type 
+   * @returns {number}
+   */
+  getPriority(type) {
+    return this.typePriority[type] || 1;
   }
 
   /**
    * Resolves overlapping entity spans deterministically.
-   * Prefer longer span length or higher confidence score.
+   * Prioritizes: 1) Specific entity type rank, 2) Confidence score, 3) Longer span length.
    * @param {Array<Object>} entities 
    * @returns {Array<Object>} Non-overlapping entities
    */
@@ -48,11 +78,18 @@ class PiiDetectionService {
         if (current.start < existing.end && existing.start < current.end) {
           isOverlapping = true;
           
-          // Replace existing if current is strictly longer or higher confidence
+          const currentPrio = this.getPriority(current.type);
+          const existingPrio = this.getPriority(existing.type);
+
           const currentLen = current.end - current.start;
           const existingLen = existing.end - existing.start;
-          
-          if (currentLen > existingLen || (currentLen === existingLen && current.confidence > existing.confidence)) {
+
+          // Replace existing if current has strictly higher type priority, or higher confidence, or longer length
+          if (
+            currentPrio > existingPrio ||
+            (currentPrio === existingPrio && current.confidence > existing.confidence) ||
+            (currentPrio === existingPrio && current.confidence === existing.confidence && currentLen > existingLen)
+          ) {
             resolved[i] = current;
           }
           break;
@@ -92,7 +129,7 @@ class PiiDetectionService {
 
     const rawCandidates = [];
 
-    // Execute all 5 deterministic detectors
+    // Execute all 9 detectors (deterministic + contextual)
     for (const detector of this.detectors) {
       try {
         const matches = detector.detect(unit.text);
@@ -133,7 +170,7 @@ class PiiDetectionService {
   }
 
   /**
-   * Scans a full structured document model for PII entities
+   * Scans a full structured document model for PII entities across all 9 categories
    * @param {string} documentId - Document identifier
    * @returns {Object} Detection result summary and entity list
    */
@@ -147,6 +184,10 @@ class PiiDetectionService {
       IP_ADDRESS: 0,
       SSN: 0,
       CREDIT_CARD: 0,
+      PERSON: 0,
+      ORGANIZATION: 0,
+      ADDRESS: 0,
+      DOB: 0,
       totalEntities: 0
     };
 
@@ -173,3 +214,4 @@ class PiiDetectionService {
 }
 
 module.exports = new PiiDetectionService();
+
