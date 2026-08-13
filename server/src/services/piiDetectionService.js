@@ -8,11 +8,14 @@ const organizationDetector = require('../detectors/organizationDetector');
 const addressDetector = require('../detectors/addressDetector');
 const dobDetector = require('../detectors/dobDetector');
 const documentService = require('./documentService');
+const piiValidationService = require('./piiValidationService');
+const piiNormalizationService = require('./piiNormalizationService');
+const piiAuditService = require('./piiAuditService');
 
 /**
  * PII Detection Service
- * Aggregates deterministic and contextual/NLP detectors, resolves overlapping candidate spans,
- * sorts entities deterministically, and maps source document location metadata.
+ * Aggregates all 9 deterministic & contextual detectors, runs validation and offset invariant checks,
+ * applies type-specific normalization, resolves candidate overlaps, and generates diagnostic detection audit reports.
  */
 class PiiDetectionService {
   constructor() {
@@ -28,7 +31,7 @@ class PiiDetectionService {
       dobDetector
     ];
 
-    // Priority ranking for resolving overlapping entity spans (higher = preferred)
+    // Specificity rank hierarchy for resolving overlapping entity spans (higher = preferred)
     this.typePriority = {
       EMAIL: 5,
       PHONE: 5,
@@ -53,12 +56,15 @@ class PiiDetectionService {
 
   /**
    * Resolves overlapping entity spans deterministically.
-   * Prioritizes: 1) Specific entity type rank, 2) Confidence score, 3) Longer span length.
+   * Collapses exact duplicate spans, resolves nested overlaps using priority rank > confidence > length,
+   * and preserves adjacent non-overlapping entities.
    * @param {Array<Object>} entities 
-   * @returns {Array<Object>} Non-overlapping entities
+   * @returns {Object} { resolvedEntities, overlapsResolvedCount }
    */
   resolveOverlaps(entities) {
-    if (entities.length <= 1) return entities;
+    if (entities.length <= 1) {
+      return { resolvedEntities: entities, overlapsResolvedCount: 0 };
+    }
 
     // Sort candidates by start ascending, then length descending
     const sorted = [...entities].sort((a, b) => {
@@ -67,6 +73,7 @@ class PiiDetectionService {
     });
 
     const resolved = [];
+    let overlapsResolvedCount = 0;
 
     for (const current of sorted) {
       let isOverlapping = false;
@@ -77,6 +84,7 @@ class PiiDetectionService {
         // Check span overlap condition: start1 < end2 && start2 < end1
         if (current.start < existing.end && existing.start < current.end) {
           isOverlapping = true;
+          overlapsResolvedCount++;
           
           const currentPrio = this.getPriority(current.type);
           const existingPrio = this.getPriority(existing.type);
@@ -101,7 +109,7 @@ class PiiDetectionService {
       }
     }
 
-    return resolved;
+    return { resolvedEntities: resolved, overlapsResolvedCount };
   }
 
   /**
@@ -118,66 +126,102 @@ class PiiDetectionService {
   }
 
   /**
-   * Detects PII entities within a single text unit object.
+   * Detects and validates PII entities within a single text unit object.
    * @param {Object} unit - Structured document unit ({ id, type, text, location })
-   * @returns {Array<Object>} List of detected entities with source mapping
+   * @returns {Object} { validEntities, rawCandidates, rejectedCandidates, overlapsCount }
    */
   detectPiiInTextUnit(unit) {
     if (!unit || typeof unit.text !== 'string' || unit.text.length === 0) {
-      return [];
+      return { validEntities: [], rawCandidates: [], rejectedCandidates: [], overlapsCount: 0 };
     }
 
     const rawCandidates = [];
+    const rejectedCandidates = [];
 
-    // Execute all 9 detectors (deterministic + contextual)
+    // 1. Execute all 9 detectors
     for (const detector of this.detectors) {
       try {
         const matches = detector.detect(unit.text);
         if (Array.isArray(matches)) {
-          rawCandidates.push(...matches);
+          matches.forEach(m => {
+            rawCandidates.push({
+              ...m,
+              source: {
+                unitId: unit.id,
+                unitType: unit.type,
+                location: unit.location
+              }
+            });
+          });
         }
       } catch (err) {
         console.warn(`[PiiDetection Service] Detector '${detector.type}' error: ${err.message}`);
       }
     }
 
-    // Resolve overlaps and sort deterministically
-    const nonOverlapping = this.resolveOverlaps(rawCandidates);
-    const sorted = this.sortEntities(nonOverlapping);
-
-    // Verify invariant & attach source location metadata
-    return sorted.map(entity => {
-      // Invariant check: unit.text.substring(start, end) === entity.text
-      const verifiedSub = unit.text.substring(entity.start, entity.end);
-      if (verifiedSub !== entity.text) {
-        console.warn(`[PiiDetection Warning] Substring invariant failed for entity '${entity.text}' vs '${verifiedSub}'`);
+    // 2. Validate candidates & enforce character offset invariant
+    const validatedCandidates = [];
+    rawCandidates.forEach(cand => {
+      const validation = piiValidationService.validateCandidate(cand, unit.text);
+      if (validation.isValid) {
+        validatedCandidates.push(cand);
+      } else {
+        rejectedCandidates.push({
+          candidate: cand,
+          reason: validation.reason
+        });
       }
+    });
+
+    // 3. Resolve overlaps among validated candidates
+    const { resolvedEntities, overlapsResolvedCount } = this.resolveOverlaps(validatedCandidates);
+    const sorted = this.sortEntities(resolvedEntities);
+
+    // 4. Attach entity contract fields (stable ID, normalized value, source metadata)
+    const validEntities = sorted.map((entity, index) => {
+      const entityId = `entity-${unit.id}-${index}`;
+      const normalizedVal = piiNormalizationService.normalize(entity.type, entity.text);
 
       return {
+        id: entityId,
         type: entity.type,
         text: entity.text,
         start: entity.start,
         end: entity.end,
         confidence: entity.confidence,
         detector: entity.detector,
+        normalizedValue: normalizedVal,
         source: {
           unitId: unit.id,
-          type: unit.type,
+          unitType: unit.type,
           location: unit.location
         }
       };
     });
+
+    return {
+      validEntities,
+      rawCandidates,
+      rejectedCandidates,
+      overlapsCount: overlapsResolvedCount
+    };
   }
 
   /**
-   * Scans a full structured document model for PII entities across all 9 categories
+   * Scans a full structured document model for PII entities across all 9 categories,
+   * performs normalization, validation, canonical grouping, and generates diagnostic detection audit metrics.
    * @param {string} documentId - Document identifier
-   * @returns {Object} Detection result summary and entity list
+   * @returns {Object} Detection result summary, audit report, and entity list
    */
   async detectPiiInDocument(documentId) {
     const structuredDoc = await documentService.parseDocument(documentId);
 
     const allEntities = [];
+    const allRawCandidates = [];
+    const allRejectedCandidates = [];
+    let totalOverlapsResolved = 0;
+    let processedUnitsCount = 0;
+
     const summary = {
       EMAIL: 0,
       PHONE: 0,
@@ -192,9 +236,16 @@ class PiiDetectionService {
     };
 
     if (structuredDoc && Array.isArray(structuredDoc.content)) {
+      processedUnitsCount = structuredDoc.content.length;
+
       structuredDoc.content.forEach(unit => {
-        const unitEntities = this.detectPiiInTextUnit(unit);
-        unitEntities.forEach(entity => {
+        const unitResult = this.detectPiiInTextUnit(unit);
+
+        allRawCandidates.push(...unitResult.rawCandidates);
+        allRejectedCandidates.push(...unitResult.rejectedCandidates);
+        totalOverlapsResolved += unitResult.overlapsCount;
+
+        unitResult.validEntities.forEach(entity => {
           allEntities.push(entity);
           if (summary[entity.type] !== undefined) {
             summary[entity.type]++;
@@ -204,14 +255,24 @@ class PiiDetectionService {
       });
     }
 
+    // Generate diagnostic detection audit report
+    const auditReport = piiAuditService.generateAuditReport({
+      documentId,
+      processedUnits: processedUnitsCount,
+      rawCandidates: allRawCandidates,
+      rejectedCandidates: allRejectedCandidates,
+      finalEntities: allEntities,
+      overlapsResolvedCount: totalOverlapsResolved
+    });
+
     return {
       documentId: documentId,
       sourceFile: structuredDoc.sourceFile,
       summary: summary,
-      entities: allEntities
+      entities: allEntities,
+      audit: auditReport
     };
   }
 }
 
 module.exports = new PiiDetectionService();
-

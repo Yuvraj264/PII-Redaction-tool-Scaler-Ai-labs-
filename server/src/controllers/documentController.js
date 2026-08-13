@@ -116,6 +116,7 @@ const detectPii = async (req, res, next) => {
       detection: {
         documentId: detectionResult.documentId,
         summary: detectionResult.summary,
+        audit: detectionResult.audit,
         sampleCount: sampleEntities.length,
         samples: sampleEntities
       }

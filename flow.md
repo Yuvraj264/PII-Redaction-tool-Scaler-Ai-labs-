@@ -23,8 +23,10 @@ This document details the operational execution flows of the PII Redaction Tool 
   - `organizationDetector.js` (**ORGANIZATION** via corporate suffixes + allowlist filtering)
   - `addressDetector.js` (**ADDRESS** via multi-component location rules & PIN matching)
   - `dobDetector.js` (**DOB** via explicit DOB context keyword matching & date parsers)
-- **Organization Allowlist Manager** (`server/src/config/organizationAllowlist.js`)
-- **Context Window & Inspection Helpers** (`server/src/utils/contextUtils.js`)
+- **Centralized Allowlist Service** (`server/src/services/allowlistService.js`)
+- **PII Normalization Service** (`server/src/services/piiNormalizationService.js`)
+- **PII Validation & Offset Invariant Checker** (`server/src/services/piiValidationService.js`)
+- **PII Audit & Diagnostics Generator** (`server/src/services/piiAuditService.js`)
 - **PII Detection Service & Overlap Resolver** (`server/src/services/piiDetectionService.js`)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
 - **Document Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
@@ -34,11 +36,11 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **React Application Shell** (`client/src/App.jsx`)
 - **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated PII Detector Unit & Integration Test Suite** (`server/tests/test_execution_006.js`)
+- **Automated PII Detector & Audit Test Suite** (`server/tests/test_execution_007.js`)
 
 ### [PLANNED]
-- **Synthetic Replacement & Redaction Engine** (DOCX text manipulation planned for Execution 007)
-- **Evaluation & Validation Engine** (Precision/Recall metrics planned for Execution 008)
+- **Synthetic Replacement & Redaction Engine** (DOCX text manipulation planned for Execution 008)
+- **Evaluation & Validation Engine** (Precision/Recall metrics planned for Execution 009)
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
 - **Interactive PII Review UI** (Document preview & entity toggle UI planned for future execution)
 
@@ -84,102 +86,93 @@ Scans structured document units using 5 deterministic PII detectors (**EMAIL**, 
 ### Overview
 Scans structured document units across 4 contextual & local NLP PII detectors (**PERSON**, **ORGANIZATION**, **ADDRESS**, **DOB**), applies false positive filtering, evaluates context windows, filters against regulatory allowlists, resolves entity overlaps, and attaches source location objects.
 
-### Execution Details
-- **Entry Point**: `POST /api/documents/:documentId/detect`
-- **Input**: StructuredDocument from `documentService.parseDocument(documentId)`
-- **Processing**:
-  1. API request invokes `documentController.detectPii`.
-  2. `piiDetectionService.detectPiiInDocument(documentId)` retrieves structured document model.
-  3. Iterates over text units (`content` array):
-     - Executes `emailDetector.detect(unit.text)` (**FLOW-005-A**).
-     - Executes `phoneDetector.detect(unit.text)` (**FLOW-005-B**).
-     - Executes `ipDetector.detect(unit.text)` (**FLOW-005-C**).
-     - Executes `ssnDetector.detect(unit.text)` (**FLOW-005-D**).
-     - Executes `creditCardDetector.detect(unit.text)` (**FLOW-005-E**).
-     - Executes `personDetector.detect(unit.text)` (**FLOW-006-A**).
-     - Executes `organizationDetector.detect(unit.text)` (**FLOW-006-B**).
-     - Executes `addressDetector.detect(unit.text)` (**FLOW-006-C**).
-     - Executes `dobDetector.detect(unit.text)` (**FLOW-006-D**).
-  4. Candidate entities undergo contextual validation and allowlist filtering (**FLOW-006-E**).
-  5. Aggregates candidate entities across all 9 detectors and invokes `resolveOverlaps()` with priority rank rules (**FLOW-006-F**).
-  6. Sorts entities deterministically by `start` asc, `end` asc, `type` alpha.
-  7. Verifies invariant `unit.text.substring(start, end) === entity.text`.
-  8. Attaches source location metadata (`unitId`, `tableIndex`, `rowIndex`, `cellIndex`, `paragraphIndex`).
-  9. Returns total entity counts and safe masked sample entity list.
+---
+
+## FLOW-007 — Entity Normalization, Validation, Conflict Resolution & Audit
+
+### Overview
+Processes raw candidate entities emitted by all 9 detectors through a post-candidate pipeline: canonical contract formatting, offset invariant enforcement, type-specific comparison key normalization, validation layer filtering with diagnostic rejection reasons, canonical duplicate grouping, rank-based overlap resolution, and detection audit report generation.
 
 ---
 
-### FLOW-006-A — PERSON Detector
-- **Entry Point**: `personDetector.detect(text)`
-- **Input**: Plain text string of structured unit.
-- **Processing**: Local NLP entity extraction via `compromise` + title-case regex patterns + honorific matchers (`Mr.`, `Mrs.`, `Dr.`, `Shri`) + role context inspection (`Company Secretary`, `Promoter`, `Director`).
-- **Validation**: Filtered against non-person keywords (`LIMITED`, `BOARD`, `COMMITTEE`, `ACT`, `SECTION`) and section headings.
-- **Output**: Array of `PERSON` candidate entities with confidence scores (0.85 - 0.95).
-- **Next Component**: `piiDetectionService.resolveOverlaps()`
-- **Failure Path**: Returns empty array on empty input or validation failure.
-- **False Positive Strategy**: Rejects organization names, single-word capitalized words without honorific, section titles, and allowlisted entities.
-- **Current Status**: **[IMPLEMENTED]**
+### FLOW-007-A — Canonical Entity Schema
+- **Entry Point**: `piiDetectionService.detectPiiInTextUnit(unit)`
+- **Input**: Validated candidate entity object.
+- **Processing**: Attaches unique entity ID (`entity-${unit.id}-${index}`), type, text, start, end, confidence, detector name, `normalizedValue`, and `source` metadata object (`unitId`, `unitType`, `location`).
+- **Validation**: Enforces mandatory schema contract fields across all 9 detectors.
+- **Output**: Canonical PII entity object.
+- **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-006-B — ORGANIZATION Detector
-- **Entry Point**: `organizationDetector.detect(text)`
-- **Input**: Plain text string of structured unit.
-- **Processing**: Capitalized company name token regex matching corporate suffixes (`Limited`, `Private Limited`, `Pvt. Ltd.`, `LLP`, `Corporation`, `Inc.`, `Industries`, `Technologies`, `Bank`, `Trust`) + `compromise` NLP org extraction.
-- **Validation**: Filtered against `organizationAllowlist.js` (`SEBI`, `BSE`, `NSE`, `RBI`, `Government of India`, `Companies Act`, `Board of Directors`).
-- **Output**: Array of `ORGANIZATION` candidate entities with confidence scores (0.85 - 0.95).
-- **Next Component**: `piiDetectionService.resolveOverlaps()`
-- **Failure Path**: Returns empty array on empty input or allowlist match.
-- **False Positive Strategy**: Excludes statutory/regulatory authorities, legal acts, and generic governance committees via allowlist.
-- **Current Status**: **[IMPLEMENTED]**
+### FLOW-007-B — Entity Normalization
+- **Entry Point**: `piiNormalizationService.normalize(type, text)`
+- **Input**: Entity type and raw source text.
+- **Processing**: Computes canonical comparison values without mutating original source `text`, `start`, or `end`:
+  - `EMAIL`: Lowercase trimmed string (`cs.connect@kshinternational.com`).
+  - `PHONE`: Strips spaces, hyphens, brackets, dots (`+912045053237`).
+  - `CREDIT_CARD` / `SSN`: Strips spaces and hyphens (`4111111111111111`).
+  - `PERSON` / `ORGANIZATION`: Collapses multiple whitespace, converts to lowercase (`ksh international limited`).
+  - `ADDRESS`: Collapses line breaks and spaces, converts to lowercase.
+  - `DOB`: Parses unambiguous dates to ISO `YYYY-MM-DD`.
+- **Output**: Normalized string key used for canonical grouping (`canonicalKey`).
+- **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-006-C — ADDRESS Detector
-- **Entry Point**: `addressDetector.detect(text)`
-- **Input**: Plain text string of structured unit.
-- **Processing**: Explicit address prefix label detection (`Registered Office:`, `Corporate Office:`, `Address:`) + multi-component location pattern matching (street/village/tower + city + state + 6-digit PIN code).
-- **Validation**: Evaluates location evidence score. Requires 2+ location keywords or valid PIN code. Rejects isolated city/state names ("Mumbai", "Maharashtra").
-- **Output**: Array of `ADDRESS` candidate entities with confidence scores (0.90 - 0.95).
-- **Next Component**: `piiDetectionService.resolveOverlaps()`
-- **Failure Path**: Returns empty array on low evidence score or single location word.
-- **False Positive Strategy**: Requires multi-part location evidence or explicit label; rejects standalone city/state words.
-- **Current Status**: **[IMPLEMENTED]**
+### FLOW-007-C — Entity Validation & Invariant Checker
+- **Entry Point**: `piiValidationService.validateCandidate(candidate, unitText)`
+- **Input**: Raw candidate entity object and unit source text string.
+- **Processing**: Evaluates structural schema validity, verifies non-negative offset bounds (`start >= 0`, `end > start`, `end <= unitText.length`), and enforces strict offset invariant: `unitText.substring(start, end) === candidate.text`. Runs detector-specific rules (Luhn checksum, IPv4 octet bounds, PIN/address evidence, DOB context).
+- **Output**: `{ isValid: true/false, reason: string | null }`. Invalid candidates are logged to `rejectedCandidates` list.
+- **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-006-D — DOB Detector
-- **Entry Point**: `dobDetector.detect(text)`
-- **Input**: Plain text string of structured unit.
-- **Processing**: Strict contextual DOB prefix label matching (`Date of Birth:`, `DOB:`, `Birth Date:`, `Born:`) followed by date string parsing (`DD/MM/YYYY`, `DD-MM-YYYY`, `Month DD, YYYY`).
-- **Validation**: Validates calendar date and birth year range (1920 to current year). Isolates ONLY date string as entity span. Rejects fiscal periods (`FY 2024-25`).
-- **Output**: Array of `DOB` candidate entities with confidence score (0.95).
-- **Next Component**: `piiDetectionService.resolveOverlaps()`
-- **Failure Path**: Returns empty array if date lacks explicit DOB context keyword.
-- **False Positive Strategy**: Strictly requires DOB context keyword within 30-char window preceding date.
-- **Current Status**: **[IMPLEMENTED]**
+### FLOW-007-D — Duplicate Occurrence Handling
+- **Entry Point**: `piiAuditService.generateAuditReport()`
+- **Input**: Final validated entities array.
+- **Processing**: Identical PII text appearing in distinct document locations (e.g. "KSH International Limited" in paragraph 10 and table cell 5) remains separate physical detection occurrences in the `entities` array. Occurrences sharing a `canonicalKey` (`type:normalizedValue`) are grouped in audit diagnostics (`duplicateOccurrences` count).
+- **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-006-E — Context Validation & Allowlisting
-- **Entry Point**: Internal detector filtering steps.
-- **Input**: Raw candidate entity spans.
-- **Processing**: Evaluates surrounding context windows (`getSurroundingContext`), checks role/title indicators, strips leading/trailing punctuation, and enforces allowlist exclusions.
-- **Output**: Validated candidate entities.
-- **Current Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-006-F — Entity Merge & Overlap Resolution
+### FLOW-007-E — Overlap Resolution
 - **Entry Point**: `piiDetectionService.resolveOverlaps(entities)`
-- **Input**: Combined raw candidates from all 9 detectors.
-- **Processing**: Resolves overlapping candidate spans `[start, end]` using priority rank rules:
+- **Input**: Validated candidate entities in a text unit.
+- **Processing**: Collapses exact duplicate candidate spans `[start, end]`. Resolves nested/partially overlapping candidate spans using specificity rank hierarchy:
   1. Specificity rank (`EMAIL`/`PHONE`/`CREDIT_CARD`/`SSN`/`IP` [Rank 5] > `DOB` [Rank 4] > `ADDRESS` [Rank 3] > `PERSON` [Rank 2] > `ORGANIZATION` [Rank 1]).
   2. Higher confidence score.
   3. Longer span length.
   4. Earlier start offset.
-- **Output**: Clean list of non-overlapping PII entities.
-- **Current Status**: **[IMPLEMENTED]**
+- **Output**: Clean array of non-overlapping PII entities. Adjacent non-overlapping entities (`John Doe john@example.com`) remain separate.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-007-F — Context Validation
+- **Entry Point**: Internal detector validation steps + `contextUtils.js`.
+- **Input**: Surrounding character text windows.
+- **Processing**: Bounded context inspection verifies preceding honorifics/roles for `PERSON`, explicit prefix labels (`Registered Office:`) for `ADDRESS`, and explicit DOB keywords (`Date of Birth:`, `DOB:`) for `DOB`.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-007-G — Allowlist Processing
+- **Entry Point**: `allowlistService.isAllowlisted(type, text)`
+- **Input**: Candidate type and text.
+- **Processing**: Queries centralized allowlist service ([allowlistService.js](file:///Users/yuvraj/Desktop/projects/scaler%20ai%20labs%20Pii%20engine%20/server/src/services/allowlistService.js)) wrapping [organizationAllowlist.js](file:///Users/yuvraj/Desktop/projects/scaler%20ai%20labs%20Pii%20engine%20/server/src/config/organizationAllowlist.js) to exclude statutory/regulatory bodies (`SEBI`, `BSE`, `NSE`, `RBI`), government bodies (`Government of India`), legal acts (`Companies Act`), and generic committees (`Board of Directors`).
+- **Output**: Boolean flag. Rejected candidates logged with reason `ALLOWLIST_EXCLUDED`.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-007-H — Detection Audit System
+- **Entry Point**: `piiAuditService.generateAuditReport()`
+- **Input**: Document ID, processed units, raw candidates, rejected candidates, final entities, overlaps resolved.
+- **Processing**: Computes safe diagnostic stats (`processedUnits`, `candidatesGenerated`, `rejectedCandidatesCount`, `finalEntitiesCount`, `duplicateOccurrences`, `overlapsResolvedCount`, `byType`, `byDetector`, `rejectedByReason`, `canonicalEntitiesSample`).
+- **Output**: Development-only diagnostic audit payload attached to `POST /api/documents/:documentId/detect` response.
+- **Status**: **[IMPLEMENTED]**
 
 ---
 
@@ -191,24 +184,24 @@ StructuredDocument (docxParserService)
   ▼
 PII Detection Service (server/src/services/piiDetectionService.js)
   │
-  ├── Deterministic Detectors:
-  │     ├─► emailDetector.js (EMAIL)
-  │     ├─► phoneDetector.js (PHONE)
-  │     ├─► ipDetector.js (IP_ADDRESS)
-  │     ├─► ssnDetector.js (SSN)
-  │     └─► creditCardDetector.js (CREDIT_CARD + Luhn Checksum)
-  │
-  └── Contextual / NLP Detectors:
-        ├─► personDetector.js (PERSON via local NLP + title context)
-        ├─► organizationDetector.js (ORGANIZATION + allowlist filtering)
-        ├─► addressDetector.js (ADDRESS via location rules & PIN code)
-        └─► dobDetector.js (DOB via explicit context keyword matching)
+  ├── 9 Detectors Execute:
+  │     ├─► emailDetector.js, phoneDetector.js, ipDetector.js, ssnDetector.js, creditCardDetector.js
+  │     └─► personDetector.js, organizationDetector.js, addressDetector.js, dobDetector.js
   │
   ▼
-Candidate Entity Aggregation
+Raw Candidate Entities
   │
   ▼
-Validation Layer & Context Window Inspection (contextUtils.js, organizationAllowlist.js)
+Validation & Invariant Layer (piiValidationService.js & allowlistService.js)
+  ├─► Schema Contract Check
+  ├─► Character Offset Invariant Verification (unitText.substring(start, end) === candidate.text)
+  ├─► Centralized Allowlist Exclusion Check
+  └─► Detector-Specific Rules (Luhn, IPv4, PIN/Address evidence, DOB context)
+  │
+  ├─► [Valid Candidates] ────► Normalization Service (piiNormalizationService.js)
+  │                                └── Computes normalizedValue comparison key
+  │
+  └─► [Invalid Candidates] ──► Logged to rejectedCandidates with Diagnostic Reason
   │
   ▼
 Overlap Resolver (resolveOverlaps by Rank: Specificity > Confidence > Length > Start)
@@ -217,11 +210,12 @@ Overlap Resolver (resolveOverlaps by Rank: Specificity > Confidence > Length > S
 Deterministic Entity Sorter (start asc, end asc, type alpha)
   │
   ▼
-Substring Invariant Verification (unit.text.substring(start, end) === entity.text)
+Canonical Contract Formatting (assigns unique id, text, start, end, normalizedValue, source metadata)
   │
   ▼
-Source Location Attacher (unitId, tableIndex, rowIndex, cellIndex, paragraphIndex)
+Detection Audit Generator (piiAuditService.js)
+  └── Computes processedUnits, candidatesGenerated, rejectedByReason, duplicateOccurrences, canonicalEntities
   │
   ▼
-HTTP 200 OK JSON Response (Summary Counts across 9 Categories + Safe Samples)
+HTTP 200 OK JSON Response (Summary Counts + Audit Report + Safe Samples)
 ```
