@@ -1,0 +1,112 @@
+{
+  "datasetVersion": "1.0",
+  "document": {
+    "fileName": "synthetic_test_doc.docx",
+    "documentHash": "synthetic_test_hash_00000000000000000000000000000000000000000000000000000000"
+  },
+  "annotationPolicy": {
+    "matching": "exact-span-and-type",
+    "policyVersion": "1.0"
+  },
+  "annotations": [
+    {
+      "id": "gold-syn-0001",
+      "type": "PERSON",
+      "text": "John Doe",
+      "source": {
+        "unitId": "unit-00001",
+        "unitType": "paragraph"
+      },
+      "start": 8,
+      "end": 16
+    },
+    {
+      "id": "gold-syn-0002",
+      "type": "EMAIL",
+      "text": "john@example.com",
+      "source": {
+        "unitId": "unit-00001",
+        "unitType": "paragraph"
+      },
+      "start": 20,
+      "end": 36
+    },
+    {
+      "id": "gold-syn-0003",
+      "type": "PHONE",
+      "text": "+91 9876543210",
+      "source": {
+        "unitId": "unit-00001",
+        "unitType": "paragraph"
+      },
+      "start": 40,
+      "end": 54
+    },
+    {
+      "id": "gold-syn-0004",
+      "type": "DOB",
+      "text": "12/05/1990",
+      "source": {
+        "unitId": "unit-00002",
+        "unitType": "paragraph"
+      },
+      "start": 15,
+      "end": 25
+    },
+    {
+      "id": "gold-syn-0005",
+      "type": "ORGANIZATION",
+      "text": "Example Industries Limited",
+      "source": {
+        "unitId": "unit-00003",
+        "unitType": "paragraph"
+      },
+      "start": 9,
+      "end": 35
+    },
+    {
+      "id": "gold-syn-0006",
+      "type": "IP_ADDRESS",
+      "text": "192.168.1.10",
+      "source": {
+        "unitId": "unit-00004",
+        "unitType": "paragraph"
+      },
+      "start": 12,
+      "end": 24
+    },
+    {
+      "id": "gold-syn-0007",
+      "type": "SSN",
+      "text": "900-01-0001",
+      "source": {
+        "unitId": "unit-00005",
+        "unitType": "paragraph"
+      },
+      "start": 5,
+      "end": 16
+    },
+    {
+      "id": "gold-syn-0008",
+      "type": "CREDIT_CARD",
+      "text": "4111-1111-1111-1111",
+      "source": {
+        "unitId": "unit-00006",
+        "unitType": "paragraph"
+      },
+      "start": 6,
+      "end": 25
+    },
+    {
+      "id": "gold-syn-0009",
+      "type": "ADDRESS",
+      "text": "42 Industrial Estate Road, Pune 410501",
+      "source": {
+        "unitId": "unit-00007",
+        "unitType": "paragraph"
+      },
+      "start": 9,
+      "end": 47
+    }
+  ]
+}

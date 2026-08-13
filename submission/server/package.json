@@ -1,0 +1,32 @@
+{
+  "name": "pii-redaction-server",
+  "version": "1.0.0",
+  "description": "Backend REST API for PII Redaction Tool - Scaler AI Labs Assignment",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "pii",
+    "redaction",
+    "express",
+    "mern",
+    "scaler"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "adm-zip": "^0.6.0",
+    "compromise": "^14.16.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "fast-xml-parser": "^5.10.1",
+    "mongoose": "^8.3.1",
+    "multer": "^2.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

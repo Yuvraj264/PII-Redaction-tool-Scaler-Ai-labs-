@@ -1,0 +1,103 @@
+{
+  "datasetVersion": "1.0",
+  "status": "DEVELOPMENT / PARTIAL GOLD DATASET",
+  "document": {
+    "fileName": "Red Herring Prospectus.docx",
+    "documentHash": "8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929",
+    "totalUnitsCount": 4535
+  },
+  "annotationPolicy": {
+    "matching": "exact-span-and-type",
+    "policyVersion": "1.0"
+  },
+  "annotations": [
+    {
+      "id": "gold-pro-0001",
+      "type": "PERSON",
+      "text": "Sarthak Malvadkar",
+      "source": {
+        "unitId": "unit-00029",
+        "unitType": "paragraph"
+      },
+      "start": 16,
+      "end": 33
+    },
+    {
+      "id": "gold-pro-0002",
+      "type": "EMAIL",
+      "text": "cs.connect@kshinternational.com",
+      "source": {
+        "unitId": "unit-00030",
+        "unitType": "paragraph"
+      },
+      "start": 8,
+      "end": 39
+    },
+    {
+      "id": "gold-pro-0003",
+      "type": "ORGANIZATION",
+      "text": "Bhandary Metal Extrusion Private Limited",
+      "source": {
+        "unitId": "unit-00025",
+        "unitType": "paragraph"
+      },
+      "start": 44,
+      "end": 84
+    },
+    {
+      "id": "gold-pro-0004",
+      "type": "ORGANIZATION",
+      "text": "KSH International Private Limited",
+      "source": {
+        "unitId": "unit-00025",
+        "unitType": "paragraph"
+      },
+      "start": 362,
+      "end": 395
+    },
+    {
+      "id": "gold-pro-0005",
+      "type": "ORGANIZATION",
+      "text": "KSH International Limited",
+      "source": {
+        "unitId": "unit-00025",
+        "unitType": "paragraph"
+      },
+      "start": 1517,
+      "end": 1542
+    },
+    {
+      "id": "gold-pro-0006",
+      "type": "PHONE",
+      "text": "+91 22 6807 7100",
+      "source": {
+        "unitId": "unit-00763",
+        "unitType": "paragraph"
+      },
+      "start": 11,
+      "end": 27
+    },
+    {
+      "id": "gold-pro-0007",
+      "type": "EMAIL",
+      "text": "ksh@icicisecurities.com",
+      "source": {
+        "unitId": "unit-00763",
+        "unitType": "paragraph"
+      },
+      "start": 35,
+      "end": 58
+    },
+    {
+      "id": "gold-pro-0008",
+      "type": "EMAIL",
+      "text": "customercare@icicisecurities.com",
+      "source": {
+        "unitId": "unit-00763",
+        "unitType": "paragraph"
+      },
+      "start": 119,
+      "end": 151
+    }
+  ]
+}

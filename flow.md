@@ -44,6 +44,8 @@ This document details the operational execution flows of the PII Redaction Tool 
   - `evaluation-report.md` (Detailed 22-section formal evaluation report)
   - `assignment-compliance-checklist.md` (13-point assignment compliance audit checklist)
   - `submission-manifest.md` (Complete deliverables inventory & file manifest)
+  - `FINAL-SUBMISSION-MANIFEST.md` (Final submission manifest)
+  - `qa-plan.md`, `qa-results.md`, `bug-register.md` (Quality assurance strategy, result matrix & bug tracking register)
 - **React Frontend UI & Document Workflow Subsystem** (`client/`):
   - `App.jsx` (State machine React shell: IDLE -> FILE_SELECTED -> UPLOADING -> UPLOADED -> DETECTING -> DETECTED -> REDACTING -> REDACTED -> VERIFYING -> VERIFIED -> EVALUATING -> COMPLETE -> READY_TO_DOWNLOAD)
   - `apiService.js` (Centralized REST API client consuming backend endpoints safely)
@@ -53,13 +55,16 @@ This document details the operational execution flows of the PII Redaction Tool 
   - `DetectionSummaryCards.jsx` (Aggregate counts across all 9 PII categories — zero raw PII strings!)
   - `VerificationCard.jsx` (Post-redaction leakage status PASS/FAIL & leak counts)
   - `EvaluationPanel.jsx` (Precision, Recall, F1, Character Accuracy, PARTIAL DATASET notice, & per-type breakdown table)
+- **Submission Packaging & Archive Subsystem**:
+  - `submission/` (Clean submission directory containing source, deliverables, evaluation JSON, and redacted output DOCX)
+  - `PII-Redaction-Tool-Submission.zip` (Clean submission zip archive)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
 - **Document Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
 - **Temporary Upload Storage** (`server/uploads/` [Git-ignored])
 - **Environment Configuration Manager** (`server/src/config/uploadConfig.js`, `server/src/config/db.js`)
 - **Error & Not-Found Middleware** (`server/src/middleware/`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated Test Suites**: `test_execution_012.js`, `test_execution_013.js`, `test_execution_014.js`, `test_execution_015.js`, `test_execution_016.js`, `test_execution_017.js`
+- **Automated Test Suites**: `test_execution_010.js` through `test_execution_019.js`
 
 ### [PLANNED — NOT IMPLEMENTED]
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
@@ -84,14 +89,14 @@ Client submits a `.docx` document to the ingestion API. The server validates for
 ## FLOW-003 — DOCX Parsing Flow
 
 ### Overview
-Parses an ingested DOCX document into a structured internal model containing paragraphs, table cells, headers, and footers with stable unit IDs (`unit-00001`) and location metadata.
+Parses an ingested DOCX document into a structured internal model containing paragraphs, table cells, headers, and footers with stable unit IDs (`unit-00001`) and location metadata without modifying the source DOCX file or running PII detection.
 
 ---
 
 ## FLOW-004 — Extraction Verification and Source Mapping
 
 ### Overview
-Validates structural text extraction, OpenXML run-level breakdown (`<w:r>`), character offset conventions (`start` inclusive, `end` exclusive), and deterministic location mapping across paragraphs, tables, headers, and footers for downstream PII targeting.
+Validates structural text extraction, OpenXML run-level breakdown (`<w:r>`), character offset conventions (`start` inclusive, `end` exclusive), and location determinism for downstream PII targeting.
 
 ---
 
@@ -179,123 +184,112 @@ Provides an interactive React UI shell in `client/` driven by a state machine th
 
 ---
 
-### FLOW-017-A — Application Entry
-- **Entry Point**: `http://localhost:5173` (`client/src/App.jsx`)
-- **Input**: User loads application.
-- **Processing**: Mounts Navbar, polls `GET /api/health`, and initializes state machine to `IDLE`.
+## FLOW-018 — Complete End-to-End QA, Security & Verification
+
+### Overview
+Executes a 35-item QA test suite, verifies source file immutability, checks path traversal security protection, verifies clean restart behavior, creates `qa-plan.md`, `qa-results.md` (`QA_PASS`), `bug-register.md`, and automated test runner `test_execution_018.js`.
+
+---
+
+## FLOW-019 — Submission Packaging & Deliverable Assembly
+
+### Overview
+Assembles the final, clean submission package in `submission/` and `PII-Redaction-Tool-Submission.zip` following strict QA gate validation.
+
+---
+
+### FLOW-019-A — QA Gate Check
+- **Entry Point**: `qa-results.md` & `bug-register.md`
+- **Input**: Verified QA matrix (35/35 PASSED) and bug register (0 open bugs).
+- **Processing**: Confirms **`QA_PASS`** status before allowing packaging to proceed.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-B — File Selection
-- **Entry Point**: `DocumentUploadArea.jsx`
-- **Input**: User selects `.docx` file via file picker or drag & drop.
-- **Processing**: Validates `.docx` file extension and 25 MB size limit for UX; updates state to `FILE_SELECTED`.
+### FLOW-019-B — Clean Submission Directory Assembly
+- **Entry Point**: `submission/`
+- **Input**: Source files, documentation, deliverables, and evaluation JSON.
+- **Processing**: Copies required `client/`, `server/`, `output/`, and `evaluation/` files while strictly excluding `node_modules/`, `.git`, `.env` secrets, and the original unredacted DOCX.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-C — Upload
-- **Entry Point**: `uploadDocument` in `apiService.js`
-- **Input**: `POST /api/documents/upload`
-- **Processing**: Sends `multipart/form-data`; stores file metadata and document ID; transitions state to `UPLOADING` -> `UPLOADED`.
+### FLOW-019-C — Source Collection
+- **Entry Point**: `submission/client/` & `submission/server/`
+- **Input**: Application source files, `package.json`, `package-lock.json`.
+- **Processing**: Copies pure JavaScript (`.js`, `.jsx`) source code without `node_modules`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-D — Detection Processing
-- **Entry Point**: `detectPii` in `apiService.js`
-- **Input**: `POST /api/documents/:documentId/detect`
-- **Processing**: Executes 9 PII detectors on backend; returns aggregate summary; transitions state to `DETECTING` -> `DETECTED`.
+### FLOW-019-D — Redacted DOCX Output Verification
+- **Entry Point**: `submission/output/final-redacted-document.docx`
+- **Input**: Generated redacted DOCX file.
+- **Processing**: Verifies file exists, reparses cleanly, and confirms **0 Confirmed Leaks (PASS)**.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-E — Detection Summary
-- **Entry Point**: `DetectionSummaryCards.jsx`
-- **Input**: Aggregate PII summary breakdown object.
-- **Processing**: Renders category cards for all 9 PII types (Zero raw PII text!).
+### FLOW-019-E — Documentation Collection
+- **Entry Point**: `submission/`
+- **Input**: `README.md`, `evaluation-report.md`, `assignment-compliance-checklist.md`, `submission-manifest.md`, `FINAL-SUBMISSION-MANIFEST.md`, `qa-plan.md`, `qa-results.md`, `bug-register.md`.
+- **Processing**: Collects all 8 assignment and QA documentation files into `submission/`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-F — Redaction Execution
-- **Entry Point**: `redactDocument` in `apiService.js`
-- **Input**: `POST /api/documents/:documentId/redact`
-- **Processing**: Triggers in-place OpenXML synthetic redaction on backend; transitions state to `REDACTING` -> `REDACTED`.
+### FLOW-019-F — Secret Scan
+- **Entry Point**: `test_execution_019.js`
+- **Processing**: Recursively scans `submission/` for `.env` files or API key patterns; confirms only `.env.example` placeholder exists.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-G — Leakage Verification
-- **Entry Point**: `verifyRedaction` in `apiService.js` & `VerificationCard.jsx`
-- **Input**: `POST /api/documents/:documentId/verify-redaction`
-- **Processing**: Runs post-redaction leakage scanner; displays PASS/FAIL status badge and safe summary counts; transitions state to `VERIFYING` -> `VERIFIED`.
+### FLOW-019-G — PII Exclusion Audit
+- **Entry Point**: `test_execution_019.js`
+- **Processing**: Scans `submission/` for raw unmasked PII strings or original prospectus document copies.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-H — Formal Evaluation Summary
-- **Entry Point**: `evaluateDocument` in `apiService.js` & `EvaluationPanel.jsx`
-- **Input**: `POST /api/evaluation/final`
-- **Processing**: Displays Precision, Recall, F1, Character Accuracy, PARTIAL DATASET notice, and per-type table; transitions state to `EVALUATING` -> `COMPLETE`.
+### FLOW-019-H — Clean Install & Extraction Simulation
+- **Entry Point**: `PII-Redaction-Tool-Submission.zip`
+- **Processing**: Generates submission zip archive, extracts into `scratch/test_extraction`, verifies folder hierarchy and file completeness, and cleans up temporary extraction folder.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-I — Download Action
-- **Entry Point**: `GET /api/documents/:documentId/download`
-- **Input**: User clicks "Download Redacted DOCX".
-- **Processing**: Streams `<documentId>_redacted.docx` directly from server.
+### FLOW-019-I — Final Packaging Verification
+- **Entry Point**: `node server/tests/test_execution_019.js`
+- **Processing**: Runs automated 11-suite packaging test runner verifying gate status, deliverables inventory, secret exclusion, metric consistency, zip extraction, and complete regression suite.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-017-J — Error Recovery
-- **Entry Point**: Catch block in `App.jsx`
-- **Input**: Network error or server HTTP exception.
-- **Processing**: Displays safe UI error alert banner without exposing stack traces.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-017-K — Reset Workflow
-- **Entry Point**: "Start New Document" button
-- **Processing**: Clears state, resets document ID, and sets workflow state back to `IDLE`.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### Comprehensive Data Flow Diagram
+### Packaging Workflow Diagram
 
 ```
-User (Browser UI)
+QA Gate (QA_PASS Confirmed)
        │
-       │ Selects DOCX
        ▼
-DocumentUploadArea (UX Validation)
+Assemble Clean submission/ Directory
+       ├── client/ (React UI - NO node_modules)
+       ├── server/ (Express API - NO node_modules, NO unredacted DOCX)
+       ├── output/ (final-redacted-document.docx - 0 Leaks)
+       ├── evaluation/ (final-evaluation-result.json)
+       ├── README.md & evaluation-report.md
+       ├── assignment-compliance-checklist.md & FINAL-SUBMISSION-MANIFEST.md
+       └── .env.example & package.json
        │
-       │ POST /api/documents/upload
        ▼
-Express Ingestion (Document ID)
+Security & Exclusion Audits (0 Secrets, 0 Raw PII, 0 TypeScript)
        │
-       │ POST /api/documents/:id/detect
        ▼
-DetectionSummaryCards (9 Categories)
+Create PII-Redaction-Tool-Submission.zip
        │
-       │ POST /api/documents/:id/redact
        ▼
-OpenXML DOCX Redaction
+Extract & Run Automated Test Runner (test_execution_019.js - 11/11 PASSED)
        │
-       │ POST /api/documents/:id/verify-redaction
        ▼
-VerificationCard (PASS / FAIL Badge)
-       │
-       │ POST /api/evaluation/final
-       ▼
-EvaluationPanel (Recall = 100.0%)
-       │
-       │ GET /api/documents/:id/download
-       ▼
-Redacted DOCX Download Stream
+FINAL SUBMISSION READY
 ```
