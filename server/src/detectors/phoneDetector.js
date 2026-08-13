@@ -44,13 +44,12 @@ class PhoneDetector {
       }
     }
 
-    // If 10-digit number does not start with +91 and lacks phone context, check standard Indian mobile prefix (starts with 6,7,8,9)
-    if (cleanDigits.length === 10 && !matchText.startsWith('+91')) {
-      const firstDigit = cleanDigits.charAt(0);
-      const hasPhoneContext = this.contextKeywords.some(kw => surroundingSnippet.includes(kw));
-      if (!['6', '7', '8', '9'].includes(firstDigit) && !hasPhoneContext) {
-        return true;
-      }
+    // If number does not start with +91 or + and lacks phone context, reject as false positive
+    const hasPhonePrefix = matchText.startsWith('+91') || matchText.startsWith('+');
+    const hasPhoneContext = this.contextKeywords.some(kw => surroundingSnippet.includes(kw));
+
+    if (!hasPhonePrefix && !hasPhoneContext) {
+      return true;
     }
 
     return false;

@@ -34,7 +34,8 @@ class EmailDetector {
       let cleanMatch = rawMatch.replace(/[.,;:!?]+$/, '');
       let cleanEnd = rawStart + cleanMatch.length;
 
-      if (cleanMatch.length > 0) {
+      // Filter false positives like www. domain prefixes
+      if (cleanMatch.length > 0 && !/^www\./i.test(cleanMatch)) {
         const entityText = text.substring(rawStart, cleanEnd);
 
         entities.push({

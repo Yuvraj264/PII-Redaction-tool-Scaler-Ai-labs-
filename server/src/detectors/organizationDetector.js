@@ -114,6 +114,16 @@ class OrganizationDetector {
         end = start + candText.length;
       }
 
+      // Trim surrounding quotation marks (e.g. “KSH International Limited” -> KSH International Limited)
+      while (/^[“"‘'«„\s]/.test(candText)) {
+        candText = candText.substring(1);
+        start++;
+      }
+      while (/[”"’'»\s]$/.test(candText)) {
+        candText = candText.substring(0, candText.length - 1);
+      }
+      end = start + candText.length;
+
       if (this.isValidCompanyCandidate(candText)) {
         // Verify invariant
         if (text.substring(start, end) === candText) {
@@ -136,7 +146,8 @@ class OrganizationDetector {
 
       for (const orgStr of orgs) {
         if (!orgStr || orgStr.length < 3) continue;
-        const cleanOrg = orgStr.replace(/[\s,.;:-]+$/, '').trim();
+        let cleanOrg = orgStr.replace(/[\s,.;:-]+$/, '').trim();
+        cleanOrg = cleanOrg.replace(/^[“"‘'«„\s]+|[”"’'»\s]+$/g, '');
 
         if (!this.isValidCompanyCandidate(cleanOrg)) {
           continue;

@@ -1,8 +1,8 @@
 {
   "evaluationVersion": "1.0",
   "reportType": "BASELINE_EVALUATION_RUN",
-  "timestamp": "2026-08-13T16:57:55.039Z",
-  "qualityGateStatus": "NEEDS_TUNING",
+  "timestamp": "2026-08-13T17:40:59.058Z",
+  "qualityGateStatus": "PARTIAL_DATASET_NEEDS_EXPANSION",
   "scope": {
     "documentId": "doc_1786622697521_f7e04c92f688",
     "sourceFileName": "doc_1786622697521_f7e04c92f688.docx",
@@ -10,28 +10,28 @@
     "coverage": "PARTIAL",
     "evaluatedTextUnits": 4535,
     "annotationsCount": 8,
-    "predictionsCount": 2014
+    "predictionsCount": 1608
   },
   "entityLevel": {
     "overall": {
-      "truePositives": 5,
-      "falsePositives": 2009,
-      "falseNegatives": 3,
-      "precision": 0.0025,
-      "recall": 0.625,
-      "f1": 0.0049,
-      "entityLevelAccuracy": 0.0025
+      "truePositives": 8,
+      "falsePositives": 1600,
+      "falseNegatives": 0,
+      "precision": 0.005,
+      "recall": 1,
+      "f1": 0.0099,
+      "entityLevelAccuracy": 0.005
     },
     "perType": {
       "PERSON": {
         "truePositives": 1,
-        "falsePositives": 1462,
+        "falsePositives": 1049,
         "falseNegatives": 0,
         "partialMatches": 0,
         "wrongTypes": 0,
-        "precision": 0.0007,
+        "precision": 0.001,
         "recall": 1,
-        "f1": 0.0014,
+        "f1": 0.0019,
         "status": "EVALUATED"
       },
       "EMAIL": {
@@ -57,14 +57,14 @@
         "status": "EVALUATED"
       },
       "ORGANIZATION": {
-        "truePositives": 0,
-        "falsePositives": 474,
-        "falseNegatives": 3,
-        "partialMatches": 3,
+        "truePositives": 3,
+        "falsePositives": 478,
+        "falseNegatives": 0,
+        "partialMatches": 0,
         "wrongTypes": 0,
-        "precision": 0,
-        "recall": 0,
-        "f1": "N/A",
+        "precision": 0.0062,
+        "recall": 1,
+        "f1": 0.0124,
         "status": "EVALUATED"
       },
       "ADDRESS": {
@@ -124,37 +124,37 @@
       }
     },
     "micro": {
-      "precision": 0.0025,
-      "recall": 0.625,
-      "f1": 0.0049
+      "precision": 0.005,
+      "recall": 1,
+      "f1": 0.0099
     },
     "macro": {
-      "precision": 0.0283,
-      "recall": 0.6,
-      "f1": 0.0529,
+      "precision": 0.0296,
+      "recall": 0.8,
+      "f1": 0.0554,
       "evaluatedClassesCount": 5
     }
   },
   "characterLevel": {
     "tpCharacters": 217,
-    "fpCharacters": 37324,
+    "fpCharacters": 30333,
     "fnCharacters": 0,
-    "tnCharacters": 283571,
-    "characterAccuracy": 0.8838,
-    "precision": 0.0058,
+    "tnCharacters": 290562,
+    "characterAccuracy": 0.9055,
+    "precision": 0.0071,
     "recall": 1,
-    "f1": 0.0115
+    "f1": 0.0141
   },
   "detectorBreakdown": {
     "person": {
       "detector": "person",
-      "totalPredictions": 1463,
+      "totalPredictions": 1050,
       "tp": 0,
       "fp": 0
     },
     "organization": {
       "detector": "organization",
-      "totalPredictions": 474,
+      "totalPredictions": 481,
       "tp": 0,
       "fp": 0
     },
@@ -179,12 +179,12 @@
   },
   "errorBreakdown": {
     "falsePositives": {
-      "total": 2009,
+      "total": 1600,
       "byType": {
-        "PERSON": 1462,
+        "PERSON": 1049,
         "EMAIL": 49,
         "PHONE": 11,
-        "ORGANIZATION": 474,
+        "ORGANIZATION": 478,
         "ADDRESS": 13,
         "DOB": 0,
         "SSN": 0,
@@ -193,12 +193,12 @@
       }
     },
     "falseNegatives": {
-      "total": 3,
+      "total": 0,
       "byType": {
         "PERSON": 0,
         "EMAIL": 0,
         "PHONE": 0,
-        "ORGANIZATION": 3,
+        "ORGANIZATION": 0,
         "ADDRESS": 0,
         "DOB": 0,
         "SSN": 0,
@@ -211,65 +211,19 @@
       "pairs": []
     },
     "partialMatches": {
-      "total": 3,
+      "total": 0,
       "byType": {
         "PERSON": 0,
         "EMAIL": 0,
         "PHONE": 0,
-        "ORGANIZATION": 3,
+        "ORGANIZATION": 0,
         "ADDRESS": 0,
         "DOB": 0,
         "SSN": 0,
         "CREDIT_CARD": 0,
         "IP_ADDRESS": 0
       },
-      "details": [
-        {
-          "unitId": "unit-00025",
-          "predType": "ORGANIZATION",
-          "goldType": "ORGANIZATION",
-          "predText": "“Bhandary Metal Extrusion Private Limited”",
-          "goldText": "Bhandary Metal Extrusion Private Limited",
-          "predSpan": [
-            43,
-            85
-          ],
-          "goldSpan": [
-            44,
-            84
-          ]
-        },
-        {
-          "unitId": "unit-00025",
-          "predType": "ORGANIZATION",
-          "goldType": "ORGANIZATION",
-          "predText": "“KSH International Private Limited”",
-          "goldText": "KSH International Private Limited",
-          "predSpan": [
-            361,
-            396
-          ],
-          "goldSpan": [
-            362,
-            395
-          ]
-        },
-        {
-          "unitId": "unit-00025",
-          "predType": "ORGANIZATION",
-          "goldType": "ORGANIZATION",
-          "predText": "“KSH International Limited”",
-          "goldText": "KSH International Limited",
-          "predSpan": [
-            1516,
-            1543
-          ],
-          "goldSpan": [
-            1517,
-            1542
-          ]
-        }
-      ]
+      "details": []
     },
     "duplicatePredictions": {
       "total": 0
@@ -286,7 +240,7 @@
       "SSN": 0,
       "CREDIT_CARD": 0,
       "IP_ADDRESS": 0,
-      "NONE": 1462
+      "NONE": 1049
     },
     "EMAIL": {
       "PERSON": 0,
@@ -316,13 +270,13 @@
       "PERSON": 0,
       "EMAIL": 0,
       "PHONE": 0,
-      "ORGANIZATION": 0,
+      "ORGANIZATION": 3,
       "ADDRESS": 0,
       "DOB": 0,
       "SSN": 0,
       "CREDIT_CARD": 0,
       "IP_ADDRESS": 0,
-      "NONE": 474
+      "NONE": 478
     },
     "ADDRESS": {
       "PERSON": 0,
@@ -388,7 +342,7 @@
       "PERSON": 0,
       "EMAIL": 0,
       "PHONE": 0,
-      "ORGANIZATION": 3,
+      "ORGANIZATION": 0,
       "ADDRESS": 0,
       "DOB": 0,
       "SSN": 0,

@@ -17,12 +17,22 @@ class PersonDetector {
       'LIMITED', 'LTD', 'PVT', 'PRIVATE', 'LLP', 'INC', 'CORP', 'CORPORATION',
       'BANK', 'TRUST', 'FOUNDATION', 'HOLDINGS', 'SECURITIES', 'CAPITAL', 'SERVICES',
       'ADVISORY', 'MANAGEMENT', 'INDUSTRIES', 'TECHNOLOGIES', 'INTERNATIONAL',
-      'BOARD', 'DIRECTORS', 'COMMITTEE', 'STATEMENT', 'SECTION', 'TABLE', 'CHAPTER',
+      'BOARD', 'DIRECTORS', 'DIRECTOR', 'COMMITTEE', 'STATEMENT', 'SECTION', 'TABLE', 'CHAPTER',
       'ACT', 'REGULATIONS', 'CLAUSE', 'SCHEDULE', 'ANNEXURE', 'EQUITY', 'SHARES',
       'RUPEES', 'RS.', 'RS', 'OFFICE', 'REGISTERED', 'CORPORATE', 'STREET', 'ROAD',
       'BUILDING', 'TOWER', 'VILLAGE', 'TALUKA', 'DISTRICT', 'CITY', 'STATE', 'INDIA',
       'MAHARASHTRA', 'PUNE', 'MUMBAI', 'SEBI', 'BSE', 'NSE', 'RBI', 'SUMMARY',
-      'NOTICE', 'PROSPECTUS', 'REPORT', 'AUDIT', 'FINANCIAL', 'FISCAL', 'YEAR'
+      'NOTICE', 'PROSPECTUS', 'REPORT', 'AUDIT', 'FINANCIAL', 'FISCAL', 'YEAR',
+      'HERRING', 'OFFER', 'ISSUER', 'PROMOTER', 'PROMOTERS', 'OFFICER', 'MANAGER',
+      'MANAGERS', 'SECTOR', 'INDUSTRY', 'ISSUE', 'VALUE', 'PRICE', 'PERCENT',
+      'PERCENTAGE', 'NUMBER', 'NUMBERS', 'PERIOD', 'DATE', 'DATES', 'GENERAL',
+      'INFORMATION', 'DETAILS', 'TOTAL', 'SERIES', 'UNITS', 'UNIT', 'LISTING',
+      'APPROVAL', 'DOCUMENT', 'DOCUMENTS', 'STATEMENTS', 'AUDITORS', 'SECRETARY',
+      'COMPLIANCE', 'RELATIONSHIP', 'POLICY', 'GROUP', 'GROUPS', 'KEY', 'PERSONNEL',
+      'EXECUTIVE', 'EXECUTIVES', 'MANAGING', 'INDEPENDENT', 'STAKEHOLDERS',
+      'REMUNERATION', 'NOMINATION', 'PUBLIC', 'PRIVACY', 'OBJECTS', 'RISK',
+      'FACTORS', 'PARTICULARS', 'BASIS', 'TERMS', 'ELIGIBILITY', 'STRUCTURE',
+      'BUSINESS', 'OVERVIEW', 'CERTAIN', 'DEFINITIONS', 'ABBREVIATIONS'
     ]);
 
     // Known common non-person phrases in prospectuses
@@ -53,6 +63,20 @@ class PersonDetector {
 
     // Honorifics pattern
     this.honorificRegex = /\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.|Shri|Smt\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g;
+  }
+
+  /**
+   * Helper to check if a text unit is an all-caps section header or title
+   * @param {string} text 
+   * @returns {boolean}
+   */
+  isHeaderUnit(text) {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (trimmed.length < 100 && trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed)) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -224,6 +248,7 @@ class PersonDetector {
     // Strategy 3: Capitalized Full Name candidate matching with contextual role checks
     let capMatch;
     this.capitalizedNameRegex.lastIndex = 0;
+    const isHeader = this.isHeaderUnit(text);
 
     while ((capMatch = this.capitalizedNameRegex.exec(text)) !== null) {
       const candName = capMatch[1].trim();
@@ -233,6 +258,11 @@ class PersonDetector {
       if (this.isValidNameStructure(candName) && !this.isNonPerson(candName)) {
         const context = getSurroundingContext(text, start, end, 50);
         const hasRole = hasPersonTitleOrRole(context.beforeText) || hasPersonTitleOrRole(context.afterText);
+
+        // If header unit, require explicit role/title context
+        if (isHeader && !hasRole) {
+          continue;
+        }
 
         // If context has a title/role OR candidate has 2+ words (first & last name)
         const wordCount = candName.split(/\s+/).length;

@@ -1,10 +1,10 @@
 # Baseline Evaluation & Error Analysis Report
 
-**Execution Date**: 2026-08-13T16:57:55.039Z
+**Execution Date**: 2026-08-13T17:40:59.058Z
 **Evaluation Version**: 1.0
 **Evaluation Scope**: PARTIAL COVERAGE (4535 text units evaluated)
 **Source Document Hash**: `8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929`
-**Baseline Quality Gate**: **NEEDS_TUNING**
+**Baseline Quality Gate**: **PARTIAL_DATASET_NEEDS_EXPANSION**
 
 > [!NOTE]
 > These metrics represent the baseline performance of the current PII detector against the validated gold-standard annotation dataset. Metrics are calculated without modifying model prediction logic.
@@ -15,9 +15,9 @@
 
 | Metric Category | Precision | Recall | F1-Score | Accuracy |
 | :--- | :---: | :---: | :---: | :---: |
-| **Entity-Level (Micro)** | 0.0025 | 0.625 | 0.0049 | 0.0025 |
-| **Entity-Level (Macro)** | 0.0283 | 0.6 | 0.0529 | N/A |
-| **Character-Level** | 0.0058 | 1 | 0.0115 | 0.8838 |
+| **Entity-Level (Micro)** | 0.005 | 1 | 0.0099 | 0.005 |
+| **Entity-Level (Macro)** | 0.0296 | 0.8 | 0.0554 | N/A |
+| **Character-Level** | 0.0071 | 1 | 0.0141 | 0.9055 |
 
 --- 
 
@@ -25,10 +25,10 @@
 
 | PII Entity Category | Gold Count | Predictions | TP | FP | FN | Precision | Recall | F1-Score |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **PERSON** | 1 | 1463 | 1 | 1462 | 0 | 0.0007 | 1 | 0.0014 |
+| **PERSON** | 1 | 1050 | 1 | 1049 | 0 | 0.001 | 1 | 0.0019 |
 | **EMAIL** | 3 | 52 | 3 | 49 | 0 | 0.0577 | 1 | 0.1091 |
 | **PHONE** | 1 | 12 | 1 | 11 | 0 | 0.0833 | 1 | 0.1538 |
-| **ORGANIZATION** | 3 | 474 | 0 | 474 | 3 | 0 | 0 | N/A |
+| **ORGANIZATION** | 3 | 481 | 3 | 478 | 0 | 0.0062 | 1 | 0.0124 |
 | **ADDRESS** | 0 | 13 | 0 | 13 | 0 | 0 | N/A | N/A |
 | **DOB** | 0 | 0 | 0 | 0 | 0 | N/A | N/A | N/A |
 | **SSN** | 0 | 0 | 0 | 0 | 0 | N/A | N/A | N/A |
@@ -39,10 +39,10 @@
 
 ## 3. Error Classification & Analysis
 
-- **False Positives**: 2009
-- **False Negatives**: 3
+- **False Positives**: 1600
+- **False Negatives**: 0
 - **Wrong Type Matches**: 0
-- **Partial Span Overlaps**: 3
+- **Partial Span Overlaps**: 0
 - **Duplicate Predictions**: 0
 
 --- 
@@ -51,8 +51,8 @@
 
 | Detector Name | Total Predictions | Type |
 | :--- | :---: | :--- |
-| `person` | 1463 | Contextual / Local NLP |
-| `organization` | 474 | Contextual / Local NLP |
+| `person` | 1050 | Contextual / Local NLP |
+| `organization` | 481 | Contextual / Local NLP |
 | `address` | 13 | Contextual / Local NLP |
 | `email` | 52 | Contextual / Local NLP |
 | `phone` | 12 | Contextual / Local NLP |
@@ -68,4 +68,4 @@
 
 --- 
 
-**Report Quality Gate**: **NEEDS_TUNING**
+**Report Quality Gate**: **PARTIAL_DATASET_NEEDS_EXPANSION**
