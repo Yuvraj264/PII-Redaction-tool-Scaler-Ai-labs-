@@ -93,7 +93,7 @@ const App = () => {
               </pre>
             ) : (
               <div style={{ color: '#ef4444', fontSize: '0.88rem', background: 'rgba(239, 68, 68, 0.1)', padding: '0.75rem', borderRadius: '6px' }}>
-                Backend server is currently offline or unreachable. Please start the backend service on port 5000.
+                Backend server is currently offline or unreachable. Please start the backend service on port 5001.
               </div>
             )}
           </div>
@@ -101,7 +101,7 @@ const App = () => {
       </main>
 
       <footer className="footer">
-        Scaler AI Labs Assignment — PII Redaction Tool Foundation (Execution 001)
+        Scaler AI Labs Assignment — PII Redaction Tool (Execution 002 DOCX Ingestion Foundation)
       </footer>
     </div>
   );

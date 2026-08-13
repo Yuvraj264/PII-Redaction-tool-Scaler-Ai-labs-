@@ -36,6 +36,12 @@ yarn-error.log*
 .AppleDouble
 .LSOverride
 
+# Uploaded document storage
+uploads/
+server/uploads/
+*.docx
+!client/public/*.docx
+
 # Temp files
 tmp/
 temp/

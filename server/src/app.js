@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const healthRoutes = require('./routes/healthRoutes');
+const documentRoutes = require('./routes/documentRoutes');
 const notFoundHandler = require('./middleware/notFoundHandler');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -13,6 +14,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // API Routes
 app.use('/api', healthRoutes);
+app.use('/api/documents', documentRoutes);
 
 // 404 Handler
 app.use(notFoundHandler);
