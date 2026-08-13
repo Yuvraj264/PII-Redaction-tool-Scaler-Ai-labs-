@@ -39,6 +39,11 @@ This document details the operational execution flows of the PII Redaction Tool 
   - Dev API Endpoints: `POST /api/evaluation/run`, `POST /api/evaluation/baseline`, & `POST /api/evaluation/final`
   - `synthetic_gold_dataset.json` (Controlled multi-category synthetic evaluation test fixture)
   - `prospectus_gold_dataset.json` (Development gold dataset for Red Herring Prospectus.docx)
+- **Assignment Documentation & Deliverables Subsystem**:
+  - `README.md` (Comprehensive 28-section assignment README)
+  - `evaluation-report.md` (Detailed 22-section formal evaluation report)
+  - `assignment-compliance-checklist.md` (13-point assignment compliance audit checklist)
+  - `submission-manifest.md` (Complete deliverables inventory & file manifest)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
 - **Document Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
 - **Temporary Upload Storage** (`server/uploads/` [Git-ignored])
@@ -47,7 +52,7 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **React Application Shell** (`client/src/App.jsx`)
 - **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated Test Suites**: `test_execution_012.js`, `test_execution_013.js`, `test_execution_014.js`, `test_execution_015.js`
+- **Automated Test Suites**: `test_execution_012.js`, `test_execution_013.js`, `test_execution_014.js`, `test_execution_015.js`, `test_execution_016.js`
 
 ### [PLANNED — NOT IMPLEMENTED]
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
@@ -153,78 +158,65 @@ Freezes the improved detector implementation (`detectorVersion: "1.0.0-final"`),
 
 ---
 
-### FLOW-015-A — Detector Freeze
-- **Entry Point**: `server/src/config/versionConfig.js`
-- **Input**: Version configuration.
-- **Processing**: Freezes detector engine version at `1.0.0-final`.
+## FLOW-016 — Final Documentation and Evaluation Reporting
+
+### Overview
+Compiles complete, 100% empirically traceable assignment documentation, including the primary assignment `README.md`, detailed `evaluation-report.md`, `assignment-compliance-checklist.md`, `submission-manifest.md`, and automated documentation consistency test runner `test_execution_016.js`.
+
+---
+
+### FLOW-016-A — Repository Fact Collection
+- **Entry Point**: `server/src/evaluation/reports/readme-facts.md` & `final-evaluation-result.json`
+- **Input**: Execution 015 benchmark metrics and system configuration.
+- **Processing**: Extracts 100% empirically verified facts for documentation.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-015-B — Source Verification
-- **Entry Point**: `goldDatasetValidator.calculateFileHash(docxPath)`
-- **Input**: Path to source `.docx` document.
-- **Processing**: Verifies source SHA-256 hash matches gold dataset document hash `8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929`.
+### FLOW-016-B — README Generation
+- **Entry Point**: `README.md`
+- **Input**: Verified system facts and technology stack specifications.
+- **Processing**: Assembles comprehensive 28-section assignment README covering architecture, 9 PII categories, detection strategies, synthetic replacement, OpenXML DOCX redaction, leakage scan, formal evaluation, baseline vs final results, false positives/negatives, tradeoffs, security, installation, setup, and limitations.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-015-C — Gold Dataset Verification
-- **Entry Point**: `goldDatasetValidator.validateDataset()`
-- **Input**: `prospectus_gold_dataset.json` and parsed text units.
-- **Processing**: Verifies dataset schema, ID uniqueness, offset bounds, and gold overlap rules (`isValid: true`).
+### FLOW-016-C — Evaluation Report Generation
+- **Entry Point**: `evaluation-report.md`
+- **Input**: `final-evaluation-result.json` & `final-vs-baseline-evaluation.md`
+- **Processing**: Assembles detailed 22-section formal evaluation report covering headline metrics, dataset details, annotation policy, exact matching methodology, baseline vs final comparison, $10 \times 10$ type confusion matrix, false positive & false negative analysis, redaction verification, source file immutability, reproducibility, and performance benchmarks.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-015-D — Final Prediction Generation
-- **Entry Point**: `piiDetectionService.detectPiiInDocument(documentId)`
-- **Input**: Ingested document ID.
-- **Processing**: Executes frozen detector pipeline against original source document text units.
+### FLOW-016-D — Metric Consistency Verification
+- **Entry Point**: `node server/tests/test_execution_016.js` (TEST 5)
+- **Input**: `README.md`, `evaluation-report.md`, `final-evaluation-result.json`, `final-vs-baseline-evaluation.md`, `readme-facts.md`.
+- **Processing**: Verifies exact metric alignment across all documentation artifacts (Recall = 100.0%, True Positives = 8, False Negatives = 0, Character Accuracy = 90.55%).
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-015-E — Final Formal Evaluation
-- **Entry Point**: `evaluationEngine.evaluate()`
-- **Input**: Fresh predictions and gold annotations.
-- **Processing**: Computes final entity-level, character-level, per-type, micro, and macro metrics.
+### FLOW-016-E — Claim Audit
+- **Entry Point**: `node server/tests/test_execution_016.js` (TEST 6 & TEST 7)
+- **Input**: Generated markdown documentation files.
+- **Processing**: Verifies zero unmasked raw PII leakage and zero forbidden TypeScript claims.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-015-F — Baseline Comparison
-- **Entry Point**: `finalComparisonGenerator.generateFinalReports()`
-- **Input**: Final and baseline evaluation run payloads.
-- **Processing**: Computes absolute and relative metric changes and builds `final-evaluation-result.json` and `final-vs-baseline-evaluation.md`.
+### FLOW-016-F — Assignment Compliance Audit
+- **Entry Point**: `assignment-compliance-checklist.md`
+- **Input**: 13 mandatory assignment compliance requirements.
+- **Processing**: Documents PASS status for Deliverables 1-4, Precision, Recall, Accuracy, FP/FN discussion, Code Quality, Reproducibility, Source File Integrity, and No Raw PII leakage.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-015-G — Regression Verification
-- **Entry Point**: `node server/tests/test_execution_015.js`
-- **Processing**: Verifies zero recall regressions across all PII categories.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-015-H — Final Redaction & Leakage Rescan
-- **Entry Point**: `docxRedactionService.redactDocument` & `leakageScanner.scanRedactedDocument`.
-- **Processing**: Generates redacted DOCX and performs post-redaction leakage scan (0 Confirmed Leaks, status: **PASS**).
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-015-I — Source Immutability Verification
-- **Entry Point**: `goldDatasetValidator.calculateFileHash(docxPath)`
-- **Processing**: Confirms source SHA-256 hash BEFORE === AFTER run.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-015-J — Final Acceptance Decision
-- **Entry Point**: `finalComparisonGenerator` evaluation summary step.
-- **Processing**: Sets final acceptance decision to **`READY_FOR_FINAL_REPORT`** (100.0% Recall, 0 FNs, 0 Leaks).
+### FLOW-016-G — Submission Manifest Inventory
+- **Entry Point**: `submission-manifest.md`
+- **Input**: Complete project codebase and artifacts inventory.
+- **Processing**: Documents file paths, purposes, and statuses for all project components.
 - **Status**: **[IMPLEMENTED]**
 
 ---
@@ -232,28 +224,19 @@ Freezes the improved detector implementation (`detectorVersion: "1.0.0-final"`),
 ### Comprehensive Data Flow Diagram
 
 ```
-Frozen PII Detector (detectorVersion: "1.0.0-final")
-            │
-            ├─────────────────────────────────────────┐
-            ▼                                         ▼
-   Fresh Predictions                       Gold Dataset Loader
-(piiDetectionService.js)               (prospectus_gold_dataset.json)
-            │                                         │
-            └───────────────────┬─────────────────────┘
-                                ▼
-                    Formal Evaluation Engine (evaluationEngine.js)
-                                │
-                                ▼
-                    Final vs Baseline Comparison Generator
-                                ├── final-evaluation-result.json
-                                └── final-vs-baseline-evaluation.md
-                                │
-                                ▼
-                    OpenXML DOCX Redaction Engine (docxRedactionService.js)
-                                │
-                                ▼
-                    Post-Redaction Leakage Scanner (leakageScanner.js)
-                                │
-                                ▼
-                    Verified Engineering Facts (readme-facts.md)
+Frozen System Implementation (1.0.0-final)
+           │
+           ▼
+Verified Metric Benchmark (final-evaluation-result.json)
+           │
+           ├──────────────────────────┬──────────────────────────┐
+           ▼                          ▼                          ▼
+       README.md            evaluation-report.md    assignment-compliance-checklist.md
+           │                          │                          │
+           └──────────────────────────┼──────────────────────────┘
+                                      ▼
+                        submission-manifest.md
+                                      │
+                                      ▼
+             Automated Consistency Test Runner (test_execution_016.js)
 ```
