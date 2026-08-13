@@ -1,5 +1,5 @@
 const express = require('express');
-const { uploadDocument, parseDocument } = require('../controllers/documentController');
+const { uploadDocument, parseDocument, detectPii } = require('../controllers/documentController');
 const { handleUpload } = require('../middleware/uploadMiddleware');
 
 const router = express.Router();
@@ -17,5 +17,12 @@ router.post('/upload', handleUpload('file'), uploadDocument);
  * @access  Public
  */
 router.post('/:documentId/parse', parseDocument);
+
+/**
+ * @route   POST /api/documents/:documentId/detect
+ * @desc    Detect PII entities (EMAIL, PHONE, IP, SSN, CREDIT_CARD) in an ingested document
+ * @access  Public
+ */
+router.post('/:documentId/detect', detectPii);
 
 module.exports = router;

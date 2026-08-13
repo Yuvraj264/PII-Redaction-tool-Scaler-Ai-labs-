@@ -1,8 +1,9 @@
 const documentService = require('../services/documentService');
+const piiDetectionService = require('../services/piiDetectionService');
 
 /**
  * Document Controller
- * Handles HTTP requests for document ingestion and structured parsing.
+ * Handles HTTP requests for document ingestion, structured parsing, and PII detection.
  */
 
 /**
@@ -80,7 +81,52 @@ const parseDocument = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Detect PII entities (EMAIL, PHONE, IP, SSN, CREDIT_CARD) in an ingested DOCX document
+ * @route   POST /api/documents/:documentId/detect
+ * @access  Public
+ */
+const detectPii = async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+
+    if (!documentId) {
+      return res.status(400).json({
+        status: 'error',
+        statusCode: 400,
+        message: 'Document ID parameter is required.'
+      });
+    }
+
+    const detectionResult = await piiDetectionService.detectPiiInDocument(documentId);
+
+    // Sample entities preview (first 10 items) for safe inspection
+    const sampleEntities = detectionResult.entities.slice(0, 10).map(e => ({
+      type: e.type,
+      start: e.start,
+      end: e.end,
+      detector: e.detector,
+      sourceUnitId: e.source.unitId,
+      sourceLocation: e.source.location
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: 'PII detection executed successfully',
+      detection: {
+        documentId: detectionResult.documentId,
+        summary: detectionResult.summary,
+        sampleCount: sampleEntities.length,
+        samples: sampleEntities
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   uploadDocument,
-  parseDocument
+  parseDocument,
+  detectPii
 };
