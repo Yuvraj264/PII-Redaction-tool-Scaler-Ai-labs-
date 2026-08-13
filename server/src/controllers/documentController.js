@@ -336,6 +336,8 @@ const downloadRedactedDocument = async (req, res, next) => {
     }
 
     const downloadFileName = `${docMeta.originalName.replace(/\.docx$/i, '')}_redacted.docx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadFileName)}"`);
     return res.download(redactedFilePath, downloadFileName);
   } catch (error) {
     next(error);

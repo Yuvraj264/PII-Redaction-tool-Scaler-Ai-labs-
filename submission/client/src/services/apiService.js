@@ -144,3 +144,29 @@ export async function evaluateDocument(documentId) {
 export function getDownloadUrl(documentId) {
   return `${API_BASE}/documents/${documentId}/download`;
 }
+
+/**
+ * Downloads the redacted DOCX file as a native Blob to ensure proper DOCX extension & OS file association
+ * @param {string} documentId - Ingested document ID
+ * @param {string} originalName - Original filename
+ */
+export async function downloadRedactedFile(documentId, originalName = 'Red_Herring_Prospectus.docx') {
+  const url = getDownloadUrl(documentId);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Download failed with status ${response.status}`);
+  }
+  const blob = await response.blob();
+  const docxBlob = new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  const blobUrl = window.URL.createObjectURL(docxBlob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+
+  const baseName = originalName.replace(/\.docx$/i, '');
+  link.download = `${baseName}_redacted.docx`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(blobUrl);
+}

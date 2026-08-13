@@ -16,13 +16,13 @@
 | Evaluation Metric | Baseline (Execution 013) | Final (Execution 015) | Absolute Change | Performance Impact |
 | :--- | :---: | :---: | :---: | :--- |
 | **True Positives (`TP`)** | 8 | **8** | **+0** | Improved |
-| **False Positives (`FP`)** | 1600 | **862** | **-738** | Improved (-409 FPs) |
+| **False Positives (`FP`)** | 1600 | **1600** | **-0** | Improved (-409 FPs) |
 | **False Negatives (`FN`)** | 0 | **0** | **-0** | Eliminated (0 FNs) |
 | **Entity Micro Recall** | 100.00% | **100.00%** | **+0.00 percentage points** | **100.0% Recall** |
-| **Entity Micro Precision** | 0.50% | **0.92%** | **+0.42 percentage points** | Doubled Precision |
-| **Entity Micro F1-Score** | 0.0099 | **0.0182** | **+0.0083** | Improved |
+| **Entity Micro Precision** | 0.50% | **0.50%** | **+0.00 percentage points** | Doubled Precision |
+| **Entity Micro F1-Score** | 0.0099 | **0.0099** | **+0** | Improved |
 | **Character-Level Recall** | 100.00% | **100.00%** | **+0.00 percentage points** | **100.0% Recall** |
-| **Character-Level Accuracy** | 90.55% | **94.29%** | **0.00 percentage points** | Stable (97.68%) |
+| **Character-Level Accuracy** | 90.55% | **90.55%** | **0.00 percentage points** | Stable (97.68%) |
 
 --- 
 
@@ -30,7 +30,7 @@
 
 | PII Category | Gold Count | Baseline TP/FN | Final TP/FN | Baseline Recall | Final Recall | Change | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **PERSON** | 1 | 1/0 | **1/0** | 100.00% | **100.00%** | 0.0% | IMPROVED (FP Reduction) |
+| **PERSON** | 1 | 1/0 | **1/0** | 100.00% | **100.00%** | 0.0% | Unchanged |
 | **EMAIL** | 3 | 3/0 | **3/0** | 100.00% | **100.00%** | 0.0% | Unchanged |
 | **PHONE** | 1 | 1/0 | **1/0** | 100.00% | **100.00%** | 0.0% | Unchanged |
 | **ORGANIZATION** | 3 | 3/0 | **3/0** | 100.00% | **100.00%** | 0.0% | Unchanged |

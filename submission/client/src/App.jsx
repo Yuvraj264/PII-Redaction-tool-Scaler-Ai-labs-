@@ -11,7 +11,8 @@ import {
   redactDocument, 
   verifyRedaction, 
   evaluateDocument, 
-  getDownloadUrl 
+  getDownloadUrl,
+  downloadRedactedFile 
 } from './services/apiService';
 import { Play, FileText, Download, RotateCcw, ShieldCheck, AlertTriangle } from 'lucide-react';
 import './index.css';
@@ -142,14 +143,13 @@ export default function App() {
             )}
 
             {canDownload && (
-              <a 
-                href={getDownloadUrl(documentId)} 
+              <button 
                 className="btn btn-success download-btn"
-                download
+                onClick={() => downloadRedactedFile(documentId, selectedFile?.name || 'Red_Herring_Prospectus.docx')}
               >
                 <Download size={18} />
                 <span>Download Redacted DOCX</span>
-              </a>
+              </button>
             )}
 
             {stage !== 'IDLE' && !isProcessing && (

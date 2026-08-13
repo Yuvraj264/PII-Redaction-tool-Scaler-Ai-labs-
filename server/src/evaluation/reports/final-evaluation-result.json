@@ -4,36 +4,36 @@
   "datasetVersion": "1.0",
   "sourceDocumentHash": "8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929",
   "reportType": "FINAL_EVALUATION_RUN",
-  "timestamp": "2026-08-13T20:38:10.842Z",
+  "timestamp": "2026-08-13T20:41:52.054Z",
   "scope": "PARTIAL DATASET EVALUATION",
   "acceptanceDecision": "READY_FOR_FINAL_REPORT",
   "scopeDetails": {
-    "documentId": "doc_1786622697521_f7e04c92f688",
-    "sourceFileName": "doc_1786622697521_f7e04c92f688.docx",
+    "documentId": "doc_1786653664031_f08f78c11b91",
+    "sourceFileName": "doc_1786653664031_f08f78c11b91.docx",
     "evaluatedTextUnits": 4535,
     "annotationsCount": 8,
-    "predictionsCount": 870
+    "predictionsCount": 1608
   },
   "entityLevel": {
     "overall": {
       "truePositives": 8,
-      "falsePositives": 862,
+      "falsePositives": 1600,
       "falseNegatives": 0,
-      "precision": 0.0092,
+      "precision": 0.005,
       "recall": 1,
-      "f1": 0.0182,
-      "entityLevelAccuracy": 0.0092
+      "f1": 0.0099,
+      "entityLevelAccuracy": 0.005
     },
     "perType": {
       "PERSON": {
         "truePositives": 1,
-        "falsePositives": 176,
+        "falsePositives": 1049,
         "falseNegatives": 0,
         "partialMatches": 0,
         "wrongTypes": 0,
-        "precision": 0.0056,
+        "precision": 0.001,
         "recall": 1,
-        "f1": 0.0112,
+        "f1": 0.0019,
         "status": "EVALUATED"
       },
       "EMAIL": {
@@ -60,13 +60,13 @@
       },
       "ORGANIZATION": {
         "truePositives": 3,
-        "falsePositives": 613,
+        "falsePositives": 478,
         "falseNegatives": 0,
         "partialMatches": 0,
         "wrongTypes": 0,
-        "precision": 0.0049,
+        "precision": 0.0062,
         "recall": 1,
-        "f1": 0.0097,
+        "f1": 0.0124,
         "status": "EVALUATED"
       },
       "ADDRESS": {
@@ -126,45 +126,45 @@
       }
     },
     "micro": {
-      "precision": 0.0092,
+      "precision": 0.005,
       "recall": 1,
-      "f1": 0.0182
+      "f1": 0.0099
     },
     "macro": {
-      "precision": 0.0303,
+      "precision": 0.0296,
       "recall": 0.8,
-      "f1": 0.0568,
+      "f1": 0.0554,
       "evaluatedClassesCount": 5
     }
   },
   "characterLevel": {
     "tpCharacters": 217,
-    "fpCharacters": 18322,
+    "fpCharacters": 30333,
     "fnCharacters": 0,
-    "tnCharacters": 302573,
-    "characterAccuracy": 0.9429,
-    "precision": 0.0117,
+    "tnCharacters": 290562,
+    "characterAccuracy": 0.9055,
+    "precision": 0.0071,
     "recall": 1,
-    "f1": 0.0231
+    "f1": 0.0141
   },
   "baselineComparison": {
     "baselineTimestamp": "2026-08-13T19:16:51.394Z",
     "absoluteChanges": {
       "recallChange": 0,
-      "precisionChange": 0.0042,
-      "f1Change": 0.0083,
-      "falsePositiveReduction": 738,
+      "precisionChange": 0,
+      "f1Change": 0,
+      "falsePositiveReduction": 0,
       "falseNegativeReduction": 0
     }
   },
   "errorBreakdown": {
     "falsePositives": {
-      "total": 862,
+      "total": 1600,
       "byType": {
-        "PERSON": 176,
+        "PERSON": 1049,
         "EMAIL": 49,
         "PHONE": 11,
-        "ORGANIZATION": 613,
+        "ORGANIZATION": 478,
         "ADDRESS": 13,
         "DOB": 0,
         "SSN": 0,
@@ -220,7 +220,7 @@
       "SSN": 0,
       "CREDIT_CARD": 0,
       "IP_ADDRESS": 0,
-      "NONE": 176
+      "NONE": 1049
     },
     "EMAIL": {
       "PERSON": 0,
@@ -256,7 +256,7 @@
       "SSN": 0,
       "CREDIT_CARD": 0,
       "IP_ADDRESS": 0,
-      "NONE": 613
+      "NONE": 478
     },
     "ADDRESS": {
       "PERSON": 0,
