@@ -53,9 +53,10 @@ class GoldDatasetValidator {
     // 3. Ground-truth text & offset verification per annotation
     const unitAnnotationsMap = new Map();
 
-    dataset.annotations.forEach((ann, idx) => {
-      const unitId = ann.source.unitId;
-      const unit = textUnitMap.get(unitId);
+    if (Array.isArray(textUnits) && textUnits.length > 0) {
+      dataset.annotations.forEach((ann, idx) => {
+        const unitId = ann.source.unitId;
+        const unit = textUnitMap.get(unitId);
 
       if (!unit) {
         errors.push(`Annotation ${ann.id}: Source unit '${unitId}' not found in document`);
@@ -80,6 +81,7 @@ class GoldDatasetValidator {
       }
       unitAnnotationsMap.get(unitId).push(ann);
     });
+    }
 
     // 4. Overlap verification among gold annotations
     unitAnnotationsMap.forEach((anns, unitId) => {

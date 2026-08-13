@@ -1,0 +1,400 @@
+{
+  "evaluationVersion": "1.0",
+  "reportType": "BASELINE_EVALUATION_RUN",
+  "timestamp": "2026-08-13T16:57:55.039Z",
+  "qualityGateStatus": "NEEDS_TUNING",
+  "scope": {
+    "documentId": "doc_1786622697521_f7e04c92f688",
+    "sourceFileName": "doc_1786622697521_f7e04c92f688.docx",
+    "documentHash": "8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929",
+    "coverage": "PARTIAL",
+    "evaluatedTextUnits": 4535,
+    "annotationsCount": 8,
+    "predictionsCount": 2014
+  },
+  "entityLevel": {
+    "overall": {
+      "truePositives": 5,
+      "falsePositives": 2009,
+      "falseNegatives": 3,
+      "precision": 0.0025,
+      "recall": 0.625,
+      "f1": 0.0049,
+      "entityLevelAccuracy": 0.0025
+    },
+    "perType": {
+      "PERSON": {
+        "truePositives": 1,
+        "falsePositives": 1462,
+        "falseNegatives": 0,
+        "partialMatches": 0,
+        "wrongTypes": 0,
+        "precision": 0.0007,
+        "recall": 1,
+        "f1": 0.0014,
+        "status": "EVALUATED"
+      },
+      "EMAIL": {
+        "truePositives": 3,
+        "falsePositives": 49,
+        "falseNegatives": 0,
+        "partialMatches": 0,
+        "wrongTypes": 0,
+        "precision": 0.0577,
+        "recall": 1,
+        "f1": 0.1091,
+        "status": "EVALUATED"
+      },
+      "PHONE": {
+        "truePositives": 1,
+        "falsePositives": 11,
+        "falseNegatives": 0,
+        "partialMatches": 0,
+        "wrongTypes": 0,
+        "precision": 0.0833,
+        "recall": 1,
+        "f1": 0.1538,
+        "status": "EVALUATED"
+      },
+      "ORGANIZATION": {
+        "truePositives": 0,
+        "falsePositives": 474,
+        "falseNegatives": 3,
+        "partialMatches": 3,
+        "wrongTypes": 0,
+        "precision": 0,
+        "recall": 0,
+        "f1": "N/A",
+        "status": "EVALUATED"
+      },
+      "ADDRESS": {
+        "truePositives": 0,
+        "falsePositives": 13,
+        "falseNegatives": 0,
+        "partialMatches": 0,
+        "wrongTypes": 0,
+        "precision": 0,
+        "recall": "N/A",
+        "f1": "N/A",
+        "status": "EVALUATED"
+      },
+      "DOB": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "partialMatches": 0,
+        "wrongTypes": 0,
+        "precision": "N/A",
+        "recall": "N/A",
+        "f1": "N/A",
+        "status": "NO_GOLD_OCCURRENCES"
+      },
+      "SSN": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "partialMatches": 0,
+        "wrongTypes": 0,
+        "precision": "N/A",
+        "recall": "N/A",
+        "f1": "N/A",
+        "status": "NO_GOLD_OCCURRENCES"
+      },
+      "CREDIT_CARD": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "partialMatches": 0,
+        "wrongTypes": 0,
+        "precision": "N/A",
+        "recall": "N/A",
+        "f1": "N/A",
+        "status": "NO_GOLD_OCCURRENCES"
+      },
+      "IP_ADDRESS": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "partialMatches": 0,
+        "wrongTypes": 0,
+        "precision": "N/A",
+        "recall": "N/A",
+        "f1": "N/A",
+        "status": "NO_GOLD_OCCURRENCES"
+      }
+    },
+    "micro": {
+      "precision": 0.0025,
+      "recall": 0.625,
+      "f1": 0.0049
+    },
+    "macro": {
+      "precision": 0.0283,
+      "recall": 0.6,
+      "f1": 0.0529,
+      "evaluatedClassesCount": 5
+    }
+  },
+  "characterLevel": {
+    "tpCharacters": 217,
+    "fpCharacters": 37324,
+    "fnCharacters": 0,
+    "tnCharacters": 283571,
+    "characterAccuracy": 0.8838,
+    "precision": 0.0058,
+    "recall": 1,
+    "f1": 0.0115
+  },
+  "detectorBreakdown": {
+    "person": {
+      "detector": "person",
+      "totalPredictions": 1463,
+      "tp": 0,
+      "fp": 0
+    },
+    "organization": {
+      "detector": "organization",
+      "totalPredictions": 474,
+      "tp": 0,
+      "fp": 0
+    },
+    "address": {
+      "detector": "address",
+      "totalPredictions": 13,
+      "tp": 0,
+      "fp": 0
+    },
+    "email": {
+      "detector": "email",
+      "totalPredictions": 52,
+      "tp": 0,
+      "fp": 0
+    },
+    "phone": {
+      "detector": "phone",
+      "totalPredictions": 12,
+      "tp": 0,
+      "fp": 0
+    }
+  },
+  "errorBreakdown": {
+    "falsePositives": {
+      "total": 2009,
+      "byType": {
+        "PERSON": 1462,
+        "EMAIL": 49,
+        "PHONE": 11,
+        "ORGANIZATION": 474,
+        "ADDRESS": 13,
+        "DOB": 0,
+        "SSN": 0,
+        "CREDIT_CARD": 0,
+        "IP_ADDRESS": 0
+      }
+    },
+    "falseNegatives": {
+      "total": 3,
+      "byType": {
+        "PERSON": 0,
+        "EMAIL": 0,
+        "PHONE": 0,
+        "ORGANIZATION": 3,
+        "ADDRESS": 0,
+        "DOB": 0,
+        "SSN": 0,
+        "CREDIT_CARD": 0,
+        "IP_ADDRESS": 0
+      }
+    },
+    "wrongType": {
+      "total": 0,
+      "pairs": []
+    },
+    "partialMatches": {
+      "total": 3,
+      "byType": {
+        "PERSON": 0,
+        "EMAIL": 0,
+        "PHONE": 0,
+        "ORGANIZATION": 3,
+        "ADDRESS": 0,
+        "DOB": 0,
+        "SSN": 0,
+        "CREDIT_CARD": 0,
+        "IP_ADDRESS": 0
+      },
+      "details": [
+        {
+          "unitId": "unit-00025",
+          "predType": "ORGANIZATION",
+          "goldType": "ORGANIZATION",
+          "predText": "“Bhandary Metal Extrusion Private Limited”",
+          "goldText": "Bhandary Metal Extrusion Private Limited",
+          "predSpan": [
+            43,
+            85
+          ],
+          "goldSpan": [
+            44,
+            84
+          ]
+        },
+        {
+          "unitId": "unit-00025",
+          "predType": "ORGANIZATION",
+          "goldType": "ORGANIZATION",
+          "predText": "“KSH International Private Limited”",
+          "goldText": "KSH International Private Limited",
+          "predSpan": [
+            361,
+            396
+          ],
+          "goldSpan": [
+            362,
+            395
+          ]
+        },
+        {
+          "unitId": "unit-00025",
+          "predType": "ORGANIZATION",
+          "goldType": "ORGANIZATION",
+          "predText": "“KSH International Limited”",
+          "goldText": "KSH International Limited",
+          "predSpan": [
+            1516,
+            1543
+          ],
+          "goldSpan": [
+            1517,
+            1542
+          ]
+        }
+      ]
+    },
+    "duplicatePredictions": {
+      "total": 0
+    }
+  },
+  "confusionMatrix": {
+    "PERSON": {
+      "PERSON": 1,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 1462
+    },
+    "EMAIL": {
+      "PERSON": 0,
+      "EMAIL": 3,
+      "PHONE": 0,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 49
+    },
+    "PHONE": {
+      "PERSON": 0,
+      "EMAIL": 0,
+      "PHONE": 1,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 11
+    },
+    "ORGANIZATION": {
+      "PERSON": 0,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 474
+    },
+    "ADDRESS": {
+      "PERSON": 0,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 13
+    },
+    "DOB": {
+      "PERSON": 0,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 0
+    },
+    "SSN": {
+      "PERSON": 0,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 0
+    },
+    "CREDIT_CARD": {
+      "PERSON": 0,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 0
+    },
+    "IP_ADDRESS": {
+      "PERSON": 0,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "ORGANIZATION": 0,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 0
+    },
+    "NONE": {
+      "PERSON": 0,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "ORGANIZATION": 3,
+      "ADDRESS": 0,
+      "DOB": 0,
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "IP_ADDRESS": 0,
+      "NONE": 0
+    }
+  }
+}

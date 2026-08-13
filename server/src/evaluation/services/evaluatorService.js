@@ -4,10 +4,12 @@ const piiDetectionService = require('../../services/piiDetectionService');
 const docxParserService = require('../../services/docxParserService');
 const evaluationDatasetLoader = require('../loaders/evaluationDatasetLoader');
 const evaluationEngine = require('../engine/evaluationEngine');
+const baselineReportGenerator = require('../reports/baselineReportGenerator');
+const goldDatasetValidator = require('../validators/goldDatasetValidator');
 
 /**
  * Evaluator Service
- * High-level orchestrator for executing formal evaluation runs on ingested documents.
+ * High-level orchestrator for executing formal evaluation runs and baseline report generation.
  */
 class EvaluatorService {
   /**
@@ -22,18 +24,31 @@ class EvaluatorService {
       throw new Error(`[EvaluatorService Error] Document '${documentId}' not found.`);
     }
 
-    // 1. Execute PII detector predictions
-    const detectionResult = await piiDetectionService.detectPiiInDocument(documentId);
-    const predictions = detectionResult.entities || [];
-
-    // 2. Parse document text units
+    // 1. Parse document text units
     const parsedDoc = await docxParserService.parseDocument(docMeta.filePath, documentId);
 
-    // 3. Resolve and load gold annotation dataset
+    // 2. Resolve and load gold annotation dataset
     const defaultDatasetPath = path.join(__dirname, '../data/prospectus_gold_dataset.json');
     const targetDatasetPath = customDatasetPath || defaultDatasetPath;
 
     const { dataset, validation } = evaluationDatasetLoader.loadDataset(targetDatasetPath, parsedDoc.content, docMeta.filePath);
+
+    // Stop if dataset validation fails
+    if (!validation.isValid) {
+      throw new Error(`[EvaluatorService Error] Gold dataset validation failed: ${validation.errors.join('; ')}`);
+    }
+
+    // SHA-256 Source Hash check
+    if (dataset.document && dataset.document.documentHash) {
+      const actualHash = goldDatasetValidator.calculateFileHash(docMeta.filePath);
+      if (actualHash && actualHash !== dataset.document.documentHash) {
+        throw new Error(`[EvaluatorService Error] SOURCE_MISMATCH: Dataset hash '${dataset.document.documentHash}' !== actual file hash '${actualHash}'`);
+      }
+    }
+
+    // 3. Execute PII detector predictions on original source document
+    const detectionResult = await piiDetectionService.detectPiiInDocument(documentId);
+    const predictions = detectionResult.entities || [];
 
     // 4. Run evaluation engine
     const evaluationReport = evaluationEngine.evaluate(predictions, dataset.annotations, parsedDoc.content);
@@ -54,7 +69,29 @@ class EvaluatorService {
         predictionsCount: predictions.length
       },
       datasetValidation: validation,
-      evaluationReport
+      evaluationReport,
+      predictions
+    };
+  }
+
+  /**
+   * Executes a baseline evaluation run and writes baseline-evaluation-result.json and baseline-evaluation-report.md
+   * @param {string} documentId - Ingested document ID
+   * @param {string} [customDatasetPath] - Optional path to custom gold dataset JSON file
+   * @returns {Object} Baseline report paths and evaluation summary
+   */
+  async runBaselineEvaluation(documentId, customDatasetPath) {
+    const runResult = await this.evaluateDocumentRun(documentId, customDatasetPath);
+    const reportArtifacts = baselineReportGenerator.generateReports(runResult, runResult.predictions);
+
+    return {
+      success: true,
+      message: 'Baseline evaluation run and error analysis completed successfully',
+      artifacts: {
+        jsonPath: reportArtifacts.jsonPath,
+        mdPath: reportArtifacts.mdPath
+      },
+      result: runResult
     };
   }
 }

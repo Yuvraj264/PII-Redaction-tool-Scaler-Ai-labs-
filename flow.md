@@ -31,7 +31,9 @@ This document details the operational execution flows of the PII Redaction Tool 
   - `evaluationEngine.js` (Span-level & character mask evaluation matching engine)
   - `metricsCalculator.js` (Entity & Character Precision, Recall, F1, Accuracy, Micro/Macro & 10x10 Confusion Matrix)
   - `evaluatorService.js` (High-level evaluation orchestrator service)
-  - `evaluationController.js` & `evaluationRoutes.js` (`POST /api/evaluation/run`)
+  - `maskingUtils.js` (Safe string masking for PII error examples)
+  - `baselineReportGenerator.js` (Baseline evaluation report generator - `baseline-evaluation-result.json` & `baseline-evaluation-report.md`)
+  - Dev API Endpoints: `POST /api/evaluation/run` & `POST /api/evaluation/baseline`
   - `synthetic_gold_dataset.json` (Controlled multi-category synthetic evaluation test fixture)
   - `prospectus_gold_dataset.json` (Development gold dataset for Red Herring Prospectus.docx)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
@@ -42,7 +44,7 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **React Application Shell** (`client/src/App.jsx`)
 - **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated Evaluator Test Suite** (`server/tests/test_execution_012.js`)
+- **Automated Evaluator & Baseline Test Suites** (`server/tests/test_execution_012.js`, `server/tests/test_execution_013.js`)
 
 ### [PLANNED — NOT IMPLEMENTED]
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
@@ -127,109 +129,97 @@ Implements a reproducible, pure JavaScript Formal PII Evaluation Engine comparin
 
 ---
 
-### FLOW-012-A — Evaluation Input Validation
-- **Entry Point**: `evaluationInputContract.validateInput(payload)`
-- **Input**: Payload `{ goldAnnotations, predictions, evaluationConfig }`.
-- **Processing**: Validates array format, required fields, offset bounds, and supported entity types independently of database or HTTP context.
+## FLOW-013 — Baseline Evaluation Run and Error Analysis
+
+### Overview
+Executes the baseline evaluation run of the existing PII detection system against the validated gold-standard dataset using the formal evaluation engine, performs deep error analysis across all 9 PII categories, evaluates detector contributions, and generates baseline JSON and Markdown reports without modifying model prediction logic (`POST /api/evaluation/baseline`).
+
+---
+
+### FLOW-013-A — Gold Dataset Verification
+- **Entry Point**: `goldDatasetValidator.validateDataset(dataset, textUnits)`
+- **Input**: `prospectus_gold_dataset.json` and parsed text units.
+- **Processing**: Verifies dataset schema, ID uniqueness, offset bounds (`start >= 0`, `end > start`, `end <= unitText.length`), substring text invariant (`unitText.substring(start, end) === annotation.text`), and gold overlap rules.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-012-B — Gold / Prediction Span Matching
+### FLOW-013-B — Source Hash Verification
+- **Entry Point**: `goldDatasetValidator.calculateFileHash(sourceFilePath)`
+- **Input**: Path to source `.docx` document.
+- **Processing**: Calculates SHA-256 hex string and compares against `dataset.document.documentHash`. Throws `SOURCE_MISMATCH` if hashes differ.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-013-C — Prediction Generation
+- **Entry Point**: `piiDetectionService.detectPiiInDocument(documentId)`
+- **Input**: Document ID.
+- **Processing**: Executes full PII detector pipeline against original source document text units.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-013-D — Baseline Metric Calculation
 - **Entry Point**: `evaluationEngine.evaluate(predictions, goldAnnotations, textUnits)`
-- **Input**: Deterministically sorted predictions and gold annotations.
-- **Processing**: Searches matching `unitId` for exact span match (`pred.start === gold.start && pred.end === gold.end`). Tracks duplicate predictions separately.
+- **Input**: Predictions and gold annotations.
+- **Processing**: Computes Entity Precision, Entity Recall, Entity F1, Entity-Level Accuracy, Token/Character Accuracy, Micro/Macro averages, and $10 \times 10$ Type Confusion Matrix.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-012-C — TP / FP / FN Classification
-- **Entry Point**: `evaluationEngine.evaluate()` classification step.
-- **Input**: Matched span pairs.
-- **Processing**:
-  - `TP`: Exact span and entity type match.
-  - `FP`: Unmatched prediction or duplicate prediction.
-  - `FN`: Unmatched gold annotation.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-012-D — Partial Match Handling
-- **Entry Point**: `evaluationEngine.evaluate()` partial overlap check.
-- **Input**: Prediction overlapping gold span (`pred.start < gold.end && gold.start < pred.end`).
-- **Processing**: Tracks partial match separately in report metrics (`errorBreakdown.partialMatches`). Contributes FP for prediction and FN for gold under strict entity evaluation.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-012-E — Wrong-Type Handling
-- **Entry Point**: `evaluationEngine.evaluate()` type match check.
-- **Input**: Exact span match with differing entity type (`pred.type !== gold.type`).
-- **Processing**: Classifies as `WRONG_TYPE`. Records exact pair in `errorBreakdown.wrongType.pairs`. Contributes FP to `pred.type` and FN to `gold.type`.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-012-F — Entity-Level Metrics
-- **Entry Point**: `metricsCalculator.calculateMetrics()`
-- **Input**: Aggregated entity counts.
-- **Processing**: Computes Entity Precision ($\text{TP}/(\text{TP}+\text{FP})$), Entity Recall ($\text{TP}/(\text{TP}+\text{FN})$), Entity F1 ($2\text{PR}/(\text{P}+\text{R})$), and Entity-Level Accuracy ($\text{TP}/(\text{TP}+\text{FP}+\text{FN})$).
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-012-G — Character-Level Metrics
-- **Entry Point**: `evaluationEngine.calculateTokenMetrics(predictions, goldAnnotations, textUnits)`
-- **Input**: Text units and character offset spans.
-- **Processing**: Generates binary character masks ($\text{PII} = 1$, $\text{NON\_PII} = 0$) across text units to yield $\text{TP}_{\text{char}}$, $\text{FP}_{\text{char}}$, $\text{FN}_{\text{char}}$, $\text{TN}_{\text{char}}$, and $\text{Character Accuracy} = (\text{TP}_{\text{char}} + \text{TN}_{\text{char}}) / \text{Total}_{\text{char}}$.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-012-H — Per-Type Metrics
+### FLOW-013-E — Per-Type Analysis
 - **Entry Point**: `metricsCalculator.calculateMetrics()` per-type loop.
 - **Input**: Per-type TP, FP, FN, Partial, WrongType counts across all 9 PII categories.
-- **Processing**: Computes independent Precision, Recall, F1 for each category. Zero-gold categories report `N/A`.
+- **Processing**: Evaluates independent performance per category. Zero-gold categories report `N/A`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-012-I — Micro Metrics
-- **Entry Point**: `metricsCalculator.calculateMetrics()` micro aggregation.
-- **Input**: Global TP, FP, FN totals.
-- **Processing**: Computes Micro Precision, Micro Recall, and Micro F1.
+### FLOW-013-F — False Positive Analysis
+- **Entry Point**: `baselineReportGenerator.buildMarkdownReport()`
+- **Input**: FP counts and predictions.
+- **Processing**: Analyzes causes of false positive detections (e.g., generic capitalized phrases, statutory body allowlist misses).
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-012-J — Macro Metrics
-- **Entry Point**: `metricsCalculator.calculateMetrics()` macro calculation.
-- **Input**: Array of evaluated class metrics.
-- **Processing**: Computes unweighted average of Precision, Recall, and F1 across applicable categories (excluding `N/A` classes from denominator).
+### FLOW-013-G — False Negative Analysis
+- **Entry Point**: `baselineReportGenerator.buildMarkdownReport()`
+- **Input**: FN counts and gold annotations.
+- **Processing**: Analyzes causes of missed gold entities (e.g., multi-token boundary issues, missing context keywords).
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-012-K — $10 \times 10$ Type Confusion Matrix
-- **Entry Point**: `evaluationEngine.evaluate()` confusion matrix tracking.
-- **Input**: Matches, Wrong-Type predictions, FPs, and FNs.
-- **Processing**: Fills $10 \times 10$ matrix (`matrix[predType][goldType]`) across 9 PII categories plus `'NONE'`.
+### FLOW-013-H — Wrong-Type Analysis
+- **Entry Point**: `evaluationEngine.evaluate()` wrong-type recorder.
+- **Input**: Exact span matches with differing entity types.
+- **Processing**: Records misclassification pairs (e.g., PERSON vs ORGANIZATION) with masked text examples.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-012-L — Evaluation Result Generation
-- **Entry Point**: `POST /api/evaluation/run`
-- **Input**: Document ID or raw inputs.
-- **Processing**: Executes evaluation pipeline and returns structured evaluation report payload.
+### FLOW-013-I — Partial Match Analysis
+- **Entry Point**: `evaluationEngine.evaluate()` partial match recorder.
+- **Input**: Overlapping prediction and gold spans.
+- **Processing**: Records partial span overlap details for boundary tuning.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-012-M — Evaluation Reproducibility
-- **Entry Point**: Evaluator Service execution.
-- **Input**: Source document hash, dataset version, evaluation configuration.
-- **Processing**: Guarantees identical metric outputs when executing same inputs.
+### FLOW-013-J — Detector Contribution Analysis
+- **Entry Point**: `baselineReportGenerator.generateReports()` detector breakdown step.
+- **Input**: Predictions array.
+- **Processing**: Summarizes total predictions by detector name (`personDetector`, `organizationDetector`, `emailDetector`, `phoneDetector`, etc.) and classifies by type (Deterministic vs Contextual/NLP).
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-013-K — Baseline Quality Gate Determination
+- **Entry Point**: `baselineReportGenerator.generateReports()` quality gate step.
+- **Input**: Evaluation scope and overall metrics.
+- **Processing**: Determines baseline quality status (`READY_FOR_TUNING`, `NEEDS_TUNING`, `PARTIAL_DATASET_NEEDS_EXPANSION`).
 - **Status**: **[IMPLEMENTED]**
 
 ---
@@ -237,28 +227,29 @@ Implements a reproducible, pure JavaScript Formal PII Evaluation Engine comparin
 ### Comprehensive Data Flow Diagram
 
 ```
-Gold Dataset (goldAnnotations)             Model Predictions (predictions)
-        │                                          │
-        └───────────────────┬──────────────────────┘
-                            ▼
-           Input Contract Validation (evaluationInputContract.js)
-                            │
-                            ▼
-           Deterministic Span Matching Engine (evaluationEngine.js)
-            ├── Duplicate Prediction Detection (duplicateCount)
-            ├── Exact Span & Type Match (TP)
-            ├── Wrong Type Match (WRONG_TYPE)
-            ├── Partial Span Overlap (PARTIAL_MATCH)
-            └── Character Binary Mask Projection (TP_char, TN_char, FP_char, FN_char)
-                            │
-                            ▼
-           Metrics Calculator Service (metricsCalculator.js)
-            ├── Entity-Level & Character-Level Accuracy
-            ├── Micro & Macro Precision / Recall / F1
-            ├── Per-Type Metrics across 9 Categories
-            ├── Detailed Error Breakdown (FPs, FNs, WrongTypes, Partials, Duplicates)
-            └── 10x10 Type Confusion Matrix (including NONE)
-                            │
-                            ▼
-           HTTP 200 OK Response (POST /api/evaluation/run)
+Original DOCX Archive
+     │
+     ▼
+SHA-256 Source Hash Verification (goldDatasetValidator.js)
+     │
+     ├─────────────────────────────────────────┐
+     ▼                                         ▼
+Current PII Detectors                     Gold Dataset Loader
+(piiDetectionService.js)                 (prospectus_gold_dataset.json)
+     │                                         │
+     │                                         ▼
+     │                                   Gold Dataset Validator
+     │                                   (goldDatasetValidator.js)
+     │                                         │
+     └───────────────────┬─────────────────────┘
+                         ▼
+             Formal Evaluation Engine (evaluationEngine.js)
+                         │
+                         ▼
+             Metrics Calculator (metricsCalculator.js)
+                         │
+                         ▼
+             Baseline Report Generator (baselineReportGenerator.js)
+                         ├── baseline-evaluation-result.json
+                         └── baseline-evaluation-report.md
 ```

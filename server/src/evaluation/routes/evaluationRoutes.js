@@ -1,5 +1,5 @@
 const express = require('express');
-const { runEvaluation } = require('../controllers/evaluationController');
+const { runEvaluation, runBaselineEvaluation } = require('../controllers/evaluationController');
 
 const router = express.Router();
 
@@ -9,5 +9,12 @@ const router = express.Router();
  * @access  Public
  */
 router.post('/run', runEvaluation);
+
+/**
+ * @route   POST /api/evaluation/baseline
+ * @desc    Execute baseline evaluation run and generate baseline report artifacts
+ * @access  Public
+ */
+router.post('/baseline', runBaselineEvaluation);
 
 module.exports = router;
