@@ -288,6 +288,43 @@ const evaluateDocument = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Download the generated redacted DOCX file for an ingested document
+ * @route   GET /api/documents/:documentId/download
+ * @access  Public
+ */
+const downloadRedactedDocument = async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+    const path = require('path');
+    const fs = require('fs');
+
+    const docMeta = documentService.getDocumentMetadata(documentId);
+    if (!docMeta) {
+      return res.status(404).json({
+        status: 'error',
+        statusCode: 404,
+        message: `Document '${documentId}' not found.`
+      });
+    }
+
+    const redactedFilePath = path.join(path.dirname(docMeta.filePath), `${documentId}_redacted.docx`);
+
+    if (!fs.existsSync(redactedFilePath)) {
+      return res.status(404).json({
+        status: 'error',
+        statusCode: 404,
+        message: `Redacted file for document '${documentId}' does not exist. Please run redaction first.`
+      });
+    }
+
+    const downloadFileName = `${docMeta.originalName.replace(/\.docx$/i, '')}_redacted.docx`;
+    return res.download(redactedFilePath, downloadFileName);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   uploadDocument,
   parseDocument,
@@ -295,6 +332,7 @@ module.exports = {
   generateReplacementPlan,
   redactDocument,
   verifyRedaction,
-  evaluateDocument
+  evaluateDocument,
+  downloadRedactedDocument
 };
 

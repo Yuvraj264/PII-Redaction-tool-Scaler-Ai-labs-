@@ -1,31 +1,46 @@
-import React from 'react';
-import { ShieldCheck, Activity } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Shield, CheckCircle2, AlertCircle } from 'lucide-react';
 
-const Navbar = ({ healthData, isBackendOnline }) => {
+export default function Navbar() {
+  const [health, setHealth] = useState('checking');
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'healthy' || data.status === 'ok' || data.success) {
+          setHealth('healthy');
+        } else {
+          setHealth('degraded');
+        }
+      })
+      .catch(() => setHealth('offline'));
+  }, []);
+
   return (
-    <header className="navbar">
-      <div className="navbar-inner">
-        <a href="/" className="brand">
+    <header className="app-navbar">
+      <div className="navbar-container">
+        <div className="brand">
           <div className="brand-icon">
-            <ShieldCheck size={22} />
+            <Shield className="icon" />
           </div>
-          <div className="brand-text">
-            <h1>PII Redaction Tool</h1>
-            <span>Scaler AI Labs</span>
+          <div>
+            <h1 className="brand-title">PII Redaction Engine</h1>
+            <p className="brand-subtitle">Enterprise DOCX Privacy Compliance</p>
           </div>
-        </a>
+        </div>
 
-        <div className={`status-badge ${isBackendOnline ? 'online' : 'offline'}`}>
-          <span className="status-dot"></span>
-          <span>
-            {isBackendOnline
-              ? `Backend Operational (v${healthData?.version || '1.0.0'})`
-              : 'Backend Disconnected'}
-          </span>
+        <div className="navbar-status">
+          <span className="version-badge">v1.0.0-final</span>
+          <div className={`health-indicator ${health}`} title={`Server Health: ${health}`}>
+            {health === 'healthy' && <CheckCircle2 className="status-icon success" />}
+            {health !== 'healthy' && <AlertCircle className="status-icon warning" />}
+            <span className="health-text">
+              {health === 'healthy' ? 'System Online' : health === 'offline' ? 'Server Offline' : 'Degraded'}
+            </span>
+          </div>
         </div>
       </div>
     </header>
   );
-};
-
-export default Navbar;
+}

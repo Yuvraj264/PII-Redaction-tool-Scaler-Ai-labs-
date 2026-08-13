@@ -6,7 +6,8 @@ const {
   generateReplacementPlan,
   redactDocument,
   verifyRedaction,
-  evaluateDocument
+  evaluateDocument,
+  downloadRedactedDocument
 } = require('../controllers/documentController');
 const { handleUpload } = require('../middleware/uploadMiddleware');
 
@@ -60,5 +61,12 @@ router.post('/:documentId/verify-redaction', verifyRedaction);
  * @access  Public
  */
 router.post('/:documentId/evaluate', evaluateDocument);
+
+/**
+ * @route   GET /api/documents/:documentId/download
+ * @desc    Download the generated redacted DOCX file
+ * @access  Public
+ */
+router.get('/:documentId/download', downloadRedactedDocument);
 
 module.exports = router;

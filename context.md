@@ -107,54 +107,65 @@ Freeze the improved detector implementation (`detectorVersion: "1.0.0-final"`), 
 ### Objective
 Produce complete, 100% empirically traceable assignment documentation, including primary `README.md`, detailed `evaluation-report.md`, `assignment-compliance-checklist.md`, `submission-manifest.md`, and automated documentation consistency test runner `test_execution_016.js`.
 
-### Documentation Sources
-- `package.json`
-- `flow.md`
-- `context.md`
-- `final-evaluation-result.json`
-- `final-vs-baseline-evaluation.md`
-- `readme-facts.md`
+---
 
-### Deliverables Created
-1. `README.md` — Comprehensive 28-section primary assignment README covering architecture, processing workflow, 9 PII categories, detection strategies, synthetic replacements, OpenXML DOCX redaction, leakage scan, formal evaluation methodology, baseline vs final results, false positives/negatives, tradeoffs, security, installation, setup, limitations, and future work.
-2. `evaluation-report.md` — Detailed 22-section formal evaluation report covering headline metrics, dataset details, annotation policy, exact matching methodology, baseline vs final comparison, $10 \times 10$ type confusion matrix, false positive & false negative analysis, redaction verification, source file immutability, reproducibility, and performance benchmarks.
-3. `assignment-compliance-checklist.md` — 13-point assignment compliance audit checklist verifying PASS status across all mandatory requirements.
-4. `submission-manifest.md` — Complete deliverables inventory listing file paths, descriptions, and statuses for all codebase components, artifacts, redacted output files, and test scripts.
-5. `server/tests/test_execution_016.js` — Automated 10-suite documentation consistency & verification test runner.
+## Execution 017
 
-### Verified Documentation Metric Benchmarks
-- **Entity Micro Recall**: **100.0%** (8 / 8 True Positives, 0 False Negatives)
-- **Entity Micro Precision**: **0.50%**
-- **Character-Level Accuracy**: **90.55%**
-- **Character-Level Recall**: **100.0%**
-- **Post-Redaction Confirmed Leaks**: **0** (Status: **PASS**)
-- **Source Document SHA-256 Immutability**: Verified match BEFORE === AFTER (`8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929`)
+### Objective
+Build the React frontend application in `client/` driven by a state machine that consumes Express REST API backend endpoints without performing PII detection or DOCX modification on the client.
 
-### Claim Audit & Security Verification
-- **Zero Raw PII Leakage**: Verified zero unmasked raw PII strings in markdown documentation artifacts.
-- **Zero TypeScript Guarantee**: Verified zero `.ts`, `.tsx`, or `tsconfig.json` files in workspace.
-- **Metric Consistency**: 100% alignment verified across `README.md`, `evaluation-report.md`, `final-evaluation-result.json`, `final-vs-baseline-evaluation.md`, and `readme-facts.md`.
+### Backend API Contracts Used
+- `POST /api/documents/upload`
+- `POST /api/documents/:documentId/parse`
+- `POST /api/documents/:documentId/detect`
+- `POST /api/documents/:documentId/redact`
+- `POST /api/documents/:documentId/verify-redaction`
+- `POST /api/evaluation/final`
+- `GET /api/documents/:documentId/download`
+- `GET /api/health`
+
+### UI Components Built
+- `client/src/App.jsx`: Main React application shell managing workflow state (`IDLE` -> `FILE_SELECTED` -> `UPLOADING` -> `UPLOADED` -> `DETECTING` -> `DETECTED` -> `REDACTING` -> `REDACTED` -> `VERIFYING` -> `VERIFIED` -> `EVALUATING` -> `COMPLETE` -> `READY_TO_DOWNLOAD`).
+- `client/src/services/apiService.js`: Centralized REST API client consuming backend endpoints safely with error normalization.
+- `client/src/components/Navbar.jsx`: Header banner with health check polling.
+- `client/src/components/DocumentUploadArea.jsx`: Drag & drop DOCX upload zone with client-side extension validation.
+- `client/src/components/WorkflowStatus.jsx`: 5-stage visual timeline status indicator.
+- `client/src/components/DetectionSummaryCards.jsx`: Aggregate counts across all 9 PII categories (Zero raw PII text!).
+- `client/src/components/VerificationCard.jsx`: Post-redaction leakage status PASS/FAIL & leak counts.
+- `client/src/components/EvaluationPanel.jsx`: Precision, Recall, F1, Character Accuracy, PARTIAL DATASET notice, & per-type breakdown table.
+
+### Security & Architecture Verification
+- **Zero Client-Side Redaction**: Confirmed 0 detection, NER, or ZIP/XML modification logic in React components.
+- **Zero Raw PII Exposure**: Confirmed zero unmasked raw PII strings in browser state, logs, or UI cards.
+- **Zero TypeScript Guarantee**: Confirmed zero `.ts`, `.tsx`, or `tsconfig.json` files in workspace.
 
 ### Test Suite Verification Results
+- **Execution 017 Test Runner**: **10/10 PASSED**
 - **Execution 016 Test Runner**: **10/10 PASSED**
 - **Execution 015 Test Runner**: **12/12 PASSED**
 - **Execution 014 Test Runner**: **11/11 PASSED**
 - **Execution 013 Test Runner**: **10/10 PASSED**
 - **Execution 012 Test Runner**: **11/11 PASSED**
 - **Execution 010 Test Runner**: **12/12 PASSED**
-- **Client Application Vite Build**: **PASSED** (589ms).
-- **Total Repository Test Suites**: **65 / 65 PASSED** (0 failures).
+- **Client Application Vite Build**: **PASSED** (615ms).
+- **Total Repository Test Suites**: **75 / 75 PASSED** (0 failures).
 
-### Files Created in Execution 016
-- `README.md`
-- `evaluation-report.md`
-- `assignment-compliance-checklist.md`
-- `submission-manifest.md`
-- `server/tests/test_execution_016.js`
+### Files Created in Execution 017
+- `client/src/services/apiService.js`
+- `client/src/components/WorkflowStatus.jsx`
+- `client/src/components/DetectionSummaryCards.jsx`
+- `client/src/components/VerificationCard.jsx`
+- `client/src/components/EvaluationPanel.jsx`
+- `client/src/components/DocumentUploadArea.jsx`
+- `server/tests/test_execution_017.js`
 
-### Files Modified in Execution 016
-- `flow.md` (Documented FLOW-016 A-G)
-- `context.md` (Appended Execution 016)
+### Files Modified in Execution 017
+- `client/src/App.jsx`
+- `client/src/components/Navbar.jsx`
+- `client/src/index.css`
+- `server/src/controllers/documentController.js` & `server/src/routes/documentRoutes.js` (Registered `GET /api/documents/:documentId/download`)
+- `flow.md` (Documented FLOW-017 A-K)
+- `context.md` (Appended Execution 017)
 
 ### Current System State
-- Full production assignment system completed, verified, and documented: Ingestion -> Parsing -> 9-Category PII Detection (**100.0% Recall**, Version `1.0.0-final`) -> Validation -> Normalization -> Replacement Plan Mapping -> OpenXML DOCX Redaction -> Post-Redaction Leakage Scan (**0 Confirmed Leaks**) -> Formal Evaluation Engine -> Final Freeze Evaluation & Baseline Comparison (`POST /api/evaluation/final`) -> Primary Documentation & Deliverables (`README.md`, `evaluation-report.md`, `assignment-compliance-checklist.md`, `submission-manifest.md`).
+- Complete production system fully operational, verified, and documented: Ingestion -> Parsing -> 9-Category PII Detection (**100.0% Recall**, Version `1.0.0-final`) -> Validation -> Normalization -> Replacement Plan Mapping -> OpenXML DOCX Redaction -> Post-Redaction Leakage Scan (**0 Confirmed Leaks**) -> Formal Evaluation Engine -> Final Freeze Evaluation & Baseline Comparison (`POST /api/evaluation/final`) -> Primary Assignment Documentation ([README.md](file:///Users/yuvraj/Desktop/projects/scaler%20ai%20labs%20Pii%20engine%20/README.md), [evaluation-report.md](file:///Users/yuvraj/Desktop/projects/scaler%20ai%20labs%20Pii%20engine%20/evaluation-report.md), [assignment-compliance-checklist.md](file:///Users/yuvraj/Desktop/projects/scaler%20ai%20labs%20Pii%20engine%20/assignment-compliance-checklist.md), [submission-manifest.md](file:///Users/yuvraj/Desktop/projects/scaler%20ai%20labs%20Pii%20engine%20/submission-manifest.md)) -> React Frontend Workflow UI (`client/`).

@@ -44,15 +44,22 @@ This document details the operational execution flows of the PII Redaction Tool 
   - `evaluation-report.md` (Detailed 22-section formal evaluation report)
   - `assignment-compliance-checklist.md` (13-point assignment compliance audit checklist)
   - `submission-manifest.md` (Complete deliverables inventory & file manifest)
+- **React Frontend UI & Document Workflow Subsystem** (`client/`):
+  - `App.jsx` (State machine React shell: IDLE -> FILE_SELECTED -> UPLOADING -> UPLOADED -> DETECTING -> DETECTED -> REDACTING -> REDACTED -> VERIFYING -> VERIFIED -> EVALUATING -> COMPLETE -> READY_TO_DOWNLOAD)
+  - `apiService.js` (Centralized REST API client consuming backend endpoints safely)
+  - `Navbar.jsx` (Header banner & health check polling)
+  - `DocumentUploadArea.jsx` (Drag & drop DOCX upload zone with client-side extension validation)
+  - `WorkflowStatus.jsx` (5-stage visual timeline status indicator)
+  - `DetectionSummaryCards.jsx` (Aggregate counts across all 9 PII categories — zero raw PII strings!)
+  - `VerificationCard.jsx` (Post-redaction leakage status PASS/FAIL & leak counts)
+  - `EvaluationPanel.jsx` (Precision, Recall, F1, Character Accuracy, PARTIAL DATASET notice, & per-type breakdown table)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
 - **Document Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
 - **Temporary Upload Storage** (`server/uploads/` [Git-ignored])
 - **Environment Configuration Manager** (`server/src/config/uploadConfig.js`, `server/src/config/db.js`)
 - **Error & Not-Found Middleware** (`server/src/middleware/`)
-- **React Application Shell** (`client/src/App.jsx`)
-- **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated Test Suites**: `test_execution_012.js`, `test_execution_013.js`, `test_execution_014.js`, `test_execution_015.js`, `test_execution_016.js`
+- **Automated Test Suites**: `test_execution_012.js`, `test_execution_013.js`, `test_execution_014.js`, `test_execution_015.js`, `test_execution_016.js`, `test_execution_017.js`
 
 ### [PLANNED — NOT IMPLEMENTED]
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
@@ -165,58 +172,96 @@ Compiles complete, 100% empirically traceable assignment documentation, includin
 
 ---
 
-### FLOW-016-A — Repository Fact Collection
-- **Entry Point**: `server/src/evaluation/reports/readme-facts.md` & `final-evaluation-result.json`
-- **Input**: Execution 015 benchmark metrics and system configuration.
-- **Processing**: Extracts 100% empirically verified facts for documentation.
+## FLOW-017 — React Frontend Workflow
+
+### Overview
+Provides an interactive React UI shell in `client/` driven by a state machine that consumes Express REST API endpoints without duplicating detection or redaction logic on the client.
+
+---
+
+### FLOW-017-A — Application Entry
+- **Entry Point**: `http://localhost:5173` (`client/src/App.jsx`)
+- **Input**: User loads application.
+- **Processing**: Mounts Navbar, polls `GET /api/health`, and initializes state machine to `IDLE`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-016-B — README Generation
-- **Entry Point**: `README.md`
-- **Input**: Verified system facts and technology stack specifications.
-- **Processing**: Assembles comprehensive 28-section assignment README covering architecture, 9 PII categories, detection strategies, synthetic replacement, OpenXML DOCX redaction, leakage scan, formal evaluation, baseline vs final results, false positives/negatives, tradeoffs, security, installation, setup, and limitations.
+### FLOW-017-B — File Selection
+- **Entry Point**: `DocumentUploadArea.jsx`
+- **Input**: User selects `.docx` file via file picker or drag & drop.
+- **Processing**: Validates `.docx` file extension and 25 MB size limit for UX; updates state to `FILE_SELECTED`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-016-C — Evaluation Report Generation
-- **Entry Point**: `evaluation-report.md`
-- **Input**: `final-evaluation-result.json` & `final-vs-baseline-evaluation.md`
-- **Processing**: Assembles detailed 22-section formal evaluation report covering headline metrics, dataset details, annotation policy, exact matching methodology, baseline vs final comparison, $10 \times 10$ type confusion matrix, false positive & false negative analysis, redaction verification, source file immutability, reproducibility, and performance benchmarks.
+### FLOW-017-C — Upload
+- **Entry Point**: `uploadDocument` in `apiService.js`
+- **Input**: `POST /api/documents/upload`
+- **Processing**: Sends `multipart/form-data`; stores file metadata and document ID; transitions state to `UPLOADING` -> `UPLOADED`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-016-D — Metric Consistency Verification
-- **Entry Point**: `node server/tests/test_execution_016.js` (TEST 5)
-- **Input**: `README.md`, `evaluation-report.md`, `final-evaluation-result.json`, `final-vs-baseline-evaluation.md`, `readme-facts.md`.
-- **Processing**: Verifies exact metric alignment across all documentation artifacts (Recall = 100.0%, True Positives = 8, False Negatives = 0, Character Accuracy = 90.55%).
+### FLOW-017-D — Detection Processing
+- **Entry Point**: `detectPii` in `apiService.js`
+- **Input**: `POST /api/documents/:documentId/detect`
+- **Processing**: Executes 9 PII detectors on backend; returns aggregate summary; transitions state to `DETECTING` -> `DETECTED`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-016-E — Claim Audit
-- **Entry Point**: `node server/tests/test_execution_016.js` (TEST 6 & TEST 7)
-- **Input**: Generated markdown documentation files.
-- **Processing**: Verifies zero unmasked raw PII leakage and zero forbidden TypeScript claims.
+### FLOW-017-E — Detection Summary
+- **Entry Point**: `DetectionSummaryCards.jsx`
+- **Input**: Aggregate PII summary breakdown object.
+- **Processing**: Renders category cards for all 9 PII types (Zero raw PII text!).
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-016-F — Assignment Compliance Audit
-- **Entry Point**: `assignment-compliance-checklist.md`
-- **Input**: 13 mandatory assignment compliance requirements.
-- **Processing**: Documents PASS status for Deliverables 1-4, Precision, Recall, Accuracy, FP/FN discussion, Code Quality, Reproducibility, Source File Integrity, and No Raw PII leakage.
+### FLOW-017-F — Redaction Execution
+- **Entry Point**: `redactDocument` in `apiService.js`
+- **Input**: `POST /api/documents/:documentId/redact`
+- **Processing**: Triggers in-place OpenXML synthetic redaction on backend; transitions state to `REDACTING` -> `REDACTED`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-016-G — Submission Manifest Inventory
-- **Entry Point**: `submission-manifest.md`
-- **Input**: Complete project codebase and artifacts inventory.
-- **Processing**: Documents file paths, purposes, and statuses for all project components.
+### FLOW-017-G — Leakage Verification
+- **Entry Point**: `verifyRedaction` in `apiService.js` & `VerificationCard.jsx`
+- **Input**: `POST /api/documents/:documentId/verify-redaction`
+- **Processing**: Runs post-redaction leakage scanner; displays PASS/FAIL status badge and safe summary counts; transitions state to `VERIFYING` -> `VERIFIED`.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-017-H — Formal Evaluation Summary
+- **Entry Point**: `evaluateDocument` in `apiService.js` & `EvaluationPanel.jsx`
+- **Input**: `POST /api/evaluation/final`
+- **Processing**: Displays Precision, Recall, F1, Character Accuracy, PARTIAL DATASET notice, and per-type table; transitions state to `EVALUATING` -> `COMPLETE`.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-017-I — Download Action
+- **Entry Point**: `GET /api/documents/:documentId/download`
+- **Input**: User clicks "Download Redacted DOCX".
+- **Processing**: Streams `<documentId>_redacted.docx` directly from server.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-017-J — Error Recovery
+- **Entry Point**: Catch block in `App.jsx`
+- **Input**: Network error or server HTTP exception.
+- **Processing**: Displays safe UI error alert banner without exposing stack traces.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-017-K — Reset Workflow
+- **Entry Point**: "Start New Document" button
+- **Processing**: Clears state, resets document ID, and sets workflow state back to `IDLE`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
@@ -224,19 +269,33 @@ Compiles complete, 100% empirically traceable assignment documentation, includin
 ### Comprehensive Data Flow Diagram
 
 ```
-Frozen System Implementation (1.0.0-final)
-           │
-           ▼
-Verified Metric Benchmark (final-evaluation-result.json)
-           │
-           ├──────────────────────────┬──────────────────────────┐
-           ▼                          ▼                          ▼
-       README.md            evaluation-report.md    assignment-compliance-checklist.md
-           │                          │                          │
-           └──────────────────────────┼──────────────────────────┘
-                                      ▼
-                        submission-manifest.md
-                                      │
-                                      ▼
-             Automated Consistency Test Runner (test_execution_016.js)
+User (Browser UI)
+       │
+       │ Selects DOCX
+       ▼
+DocumentUploadArea (UX Validation)
+       │
+       │ POST /api/documents/upload
+       ▼
+Express Ingestion (Document ID)
+       │
+       │ POST /api/documents/:id/detect
+       ▼
+DetectionSummaryCards (9 Categories)
+       │
+       │ POST /api/documents/:id/redact
+       ▼
+OpenXML DOCX Redaction
+       │
+       │ POST /api/documents/:id/verify-redaction
+       ▼
+VerificationCard (PASS / FAIL Badge)
+       │
+       │ POST /api/evaluation/final
+       ▼
+EvaluationPanel (Recall = 100.0%)
+       │
+       │ GET /api/documents/:id/download
+       ▼
+Redacted DOCX Download Stream
 ```
