@@ -28,6 +28,19 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **PII Validation & Offset Invariant Checker** (`server/src/services/piiValidationService.js`)
 - **PII Audit & Diagnostics Generator** (`server/src/services/piiAuditService.js`)
 - **PII Detection Service & Overlap Resolver** (`server/src/services/piiDetectionService.js`)
+- **Synthetic Replacement Mapping Subsystem**:
+  - `replacementRegistry.js` (Bidirectional canonicalKey ↔ replacement mapping with collision prevention)
+  - `replacementService.js` (Replacement Plan builder & API service)
+  - **9 Type-Specific Synthetic Generators**:
+    - `personGenerator.js` (**PERSON** synthetic name pool)
+    - `emailGenerator.js` (**EMAIL** safe `@example.com` domain)
+    - `phoneGenerator.js` (**PHONE** reserved test range)
+    - `organizationGenerator.js` (**ORGANIZATION** synthetic legal entities)
+    - `addressGenerator.js` (**ADDRESS** synthetic physical addresses)
+    - `dobGenerator.js` (**DOB** synthetic birth dates)
+    - `ssnGenerator.js` (**SSN** test block `900-XX-XXXX`)
+    - `creditCardGenerator.js` (**CREDIT_CARD** Luhn test cards)
+    - `ipGenerator.js` (**IP_ADDRESS** RFC 5737 doc block)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
 - **Document Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
 - **Temporary Upload Storage** (`server/uploads/` [Git-ignored])
@@ -36,11 +49,11 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **React Application Shell** (`client/src/App.jsx`)
 - **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated PII Detector & Audit Test Suite** (`server/tests/test_execution_007.js`)
+- **Automated PII Detector, Audit & Replacement Test Suite** (`server/tests/test_execution_008.js`)
 
-### [PLANNED]
-- **Synthetic Replacement & Redaction Engine** (DOCX text manipulation planned for Execution 008)
-- **Evaluation & Validation Engine** (Precision/Recall metrics planned for Execution 009)
+### [PLANNED — NOT IMPLEMENTED]
+- **OpenXML DOCX Text Substitution Engine** (DOCX text node replacement planned for Execution 009)
+- **Evaluation & Validation Engine** (Precision/Recall metrics planned for Execution 010)
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
 - **Interactive PII Review UI** (Document preview & entity toggle UI planned for future execution)
 
@@ -95,83 +108,82 @@ Processes raw candidate entities emitted by all 9 detectors through a post-candi
 
 ---
 
-### FLOW-007-A — Canonical Entity Schema
-- **Entry Point**: `piiDetectionService.detectPiiInTextUnit(unit)`
-- **Input**: Validated candidate entity object.
-- **Processing**: Attaches unique entity ID (`entity-${unit.id}-${index}`), type, text, start, end, confidence, detector name, `normalizedValue`, and `source` metadata object (`unitId`, `unitType`, `location`).
-- **Validation**: Enforces mandatory schema contract fields across all 9 detectors.
-- **Output**: Canonical PII entity object.
+## FLOW-008 — Synthetic PII Replacement Mapping
+
+### Overview
+Maps validated PII entities to realistic synthetic alternatives, guarantees 1-to-1 consistency for repeated entity occurrences, prevents synthetic replacement collisions, and generates a structured, descending-offset sorted Replacement Plan without modifying source DOCX files.
+
+---
+
+### FLOW-008-A — Canonical Entity Creation
+- **Entry Point**: `piiNormalizationService.getCanonicalKey(type, text)`
+- **Input**: Validated PII entity type and text.
+- **Processing**: Derives canonical comparison key (`type:normalizedValue`) using type-specific normalization.
+- **Output**: Deterministic string key (e.g. `organization:ksh international limited`).
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-007-B — Entity Normalization
-- **Entry Point**: `piiNormalizationService.normalize(type, text)`
-- **Input**: Entity type and raw source text.
-- **Processing**: Computes canonical comparison values without mutating original source `text`, `start`, or `end`:
-  - `EMAIL`: Lowercase trimmed string (`cs.connect@kshinternational.com`).
-  - `PHONE`: Strips spaces, hyphens, brackets, dots (`+912045053237`).
-  - `CREDIT_CARD` / `SSN`: Strips spaces and hyphens (`4111111111111111`).
-  - `PERSON` / `ORGANIZATION`: Collapses multiple whitespace, converts to lowercase (`ksh international limited`).
-  - `ADDRESS`: Collapses line breaks and spaces, converts to lowercase.
-  - `DOB`: Parses unambiguous dates to ISO `YYYY-MM-DD`.
-- **Output**: Normalized string key used for canonical grouping (`canonicalKey`).
+### FLOW-008-B — Replacement Registry Lookup & Registry Map
+- **Entry Point**: `replacementRegistry.getOrCreateReplacement(canonicalKey, entity)`
+- **Input**: Canonical key and entity object.
+- **Processing**:
+  1. Checks `canonicalMap` for existing key.
+  2. If found, reuses existing synthetic replacement (guarantees consistency across all document occurrences).
+  3. If not found, invokes type-specific generator and checks `reverseMap` for collisions.
+  4. Stores bidirectional mapping in registry.
+- **Output**: `{ canonicalKey, replacement, isReused }`.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-007-C — Entity Validation & Invariant Checker
-- **Entry Point**: `piiValidationService.validateCandidate(candidate, unitText)`
-- **Input**: Raw candidate entity object and unit source text string.
-- **Processing**: Evaluates structural schema validity, verifies non-negative offset bounds (`start >= 0`, `end > start`, `end <= unitText.length`), and enforces strict offset invariant: `unitText.substring(start, end) === candidate.text`. Runs detector-specific rules (Luhn checksum, IPv4 octet bounds, PIN/address evidence, DOB context).
-- **Output**: `{ isValid: true/false, reason: string | null }`. Invalid candidates are logged to `rejectedCandidates` list.
+### FLOW-008-C — Synthetic Generator Selection
+- **Entry Point**: `generator.generate(entity, index)`
+- **Input**: PII entity and generator index counter.
+- **Processing**: Executes type-specific synthetic generator:
+  - `personGenerator`: Selects realistic synthetic names (`Arjun Mehta`, `Riya Sharma`).
+  - `emailGenerator`: Generates safe `@example.com` email (`arjun.mehta@example.com`).
+  - `phoneGenerator`: Generates reserved series Indian phone number (`+91 98765 01001`).
+  - `organizationGenerator`: Generates synthetic company preserving legal suffix (`Apex Meridian Technologies Private Limited`).
+  - `addressGenerator`: Generates multi-component synthetic address (`42 Industrial Estate Road...`).
+  - `dobGenerator`: Generates valid birth date (`1985-04-12`).
+  - `ssnGenerator`: Generates test SSN (`900-01-0001`).
+  - `creditCardGenerator`: Generates Luhn-valid test card (`4111-1111-1111-1111`).
+  - `ipGenerator`: Generates RFC 5737 IPv4 address (`192.0.2.1`).
+- **Output**: Synthetic replacement string.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-007-D — Duplicate Occurrence Handling
-- **Entry Point**: `piiAuditService.generateAuditReport()`
-- **Input**: Final validated entities array.
-- **Processing**: Identical PII text appearing in distinct document locations (e.g. "KSH International Limited" in paragraph 10 and table cell 5) remains separate physical detection occurrences in the `entities` array. Occurrences sharing a `canonicalKey` (`type:normalizedValue`) are grouped in audit diagnostics (`duplicateOccurrences` count).
+### FLOW-008-D — Collision Prevention
+- **Entry Point**: `replacementRegistry.getOrCreateReplacement()` collision check loop.
+- **Input**: Candidate synthetic replacement string.
+- **Processing**: Checks `reverseMap.has(candidateReplacement)`. If collision detected or replacement equals original text, increments generator index counter until a unique replacement string is obtained.
+- **Output**: Collision-free synthetic replacement string.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-007-E — Overlap Resolution
-- **Entry Point**: `piiDetectionService.resolveOverlaps(entities)`
-- **Input**: Validated candidate entities in a text unit.
-- **Processing**: Collapses exact duplicate candidate spans `[start, end]`. Resolves nested/partially overlapping candidate spans using specificity rank hierarchy:
-  1. Specificity rank (`EMAIL`/`PHONE`/`CREDIT_CARD`/`SSN`/`IP` [Rank 5] > `DOB` [Rank 4] > `ADDRESS` [Rank 3] > `PERSON` [Rank 2] > `ORGANIZATION` [Rank 1]).
-  2. Higher confidence score.
-  3. Longer span length.
-  4. Earlier start offset.
-- **Output**: Clean array of non-overlapping PII entities. Adjacent non-overlapping entities (`John Doe john@example.com`) remain separate.
+### FLOW-008-E — Replacement Plan Generation
+- **Entry Point**: `replacementService.generateReplacementPlan(documentId)`
+- **Input**: Document ID.
+- **Processing**:
+  1. Retrieves valid PII entities from `piiDetectionService.detectPiiInDocument(documentId)`.
+  2. Maps each entity to synthetic replacement via `ReplacementRegistry`.
+  3. Groups replacement items by text unit ID (`unitId`).
+  4. Calculates length changes (`originalLength`, `replacementLength`, `lengthDelta`).
+  5. Assembles unit plans and summary metrics.
+- **Output**: Structured Replacement Plan JSON payload.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-007-F — Context Validation
-- **Entry Point**: Internal detector validation steps + `contextUtils.js`.
-- **Input**: Surrounding character text windows.
-- **Processing**: Bounded context inspection verifies preceding honorifics/roles for `PERSON`, explicit prefix labels (`Registered Office:`) for `ADDRESS`, and explicit DOB keywords (`Date of Birth:`, `DOB:`) for `DOB`.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-007-G — Allowlist Processing
-- **Entry Point**: `allowlistService.isAllowlisted(type, text)`
-- **Input**: Candidate type and text.
-- **Processing**: Queries centralized allowlist service ([allowlistService.js](file:///Users/yuvraj/Desktop/projects/scaler%20ai%20labs%20Pii%20engine%20/server/src/services/allowlistService.js)) wrapping [organizationAllowlist.js](file:///Users/yuvraj/Desktop/projects/scaler%20ai%20labs%20Pii%20engine%20/server/src/config/organizationAllowlist.js) to exclude statutory/regulatory bodies (`SEBI`, `BSE`, `NSE`, `RBI`), government bodies (`Government of India`), legal acts (`Companies Act`), and generic committees (`Board of Directors`).
-- **Output**: Boolean flag. Rejected candidates logged with reason `ALLOWLIST_EXCLUDED`.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-007-H — Detection Audit System
-- **Entry Point**: `piiAuditService.generateAuditReport()`
-- **Input**: Document ID, processed units, raw candidates, rejected candidates, final entities, overlaps resolved.
-- **Processing**: Computes safe diagnostic stats (`processedUnits`, `candidatesGenerated`, `rejectedCandidatesCount`, `finalEntitiesCount`, `duplicateOccurrences`, `overlapsResolvedCount`, `byType`, `byDetector`, `rejectedByReason`, `canonicalEntitiesSample`).
-- **Output**: Development-only diagnostic audit payload attached to `POST /api/documents/:documentId/detect` response.
+### FLOW-008-F — Replacement Plan Descending Ordering
+- **Entry Point**: `replacementService.generateReplacementPlan()` sorting step.
+- **Input**: Unit plan replacements array.
+- **Processing**: Sorts replacements within each text unit plan by `start` offset **DESCENDING** (e.g. offset 100 before offset 20).
+- **Rationale**: Downstream in-place string replacement executed from end-of-string to beginning ensures earlier character offsets remain unaffected by length changes.
+- **Output**: Descending-sorted unit plans.
 - **Status**: **[IMPLEMENTED]**
 
 ---
@@ -179,43 +191,29 @@ Processes raw candidate entities emitted by all 9 detectors through a post-candi
 ### Comprehensive Data Flow Diagram
 
 ```
-StructuredDocument (docxParserService)
+Validated PII Entities (piiDetectionService.js)
   │
   ▼
-PII Detection Service (server/src/services/piiDetectionService.js)
-  │
-  ├── 9 Detectors Execute:
-  │     ├─► emailDetector.js, phoneDetector.js, ipDetector.js, ssnDetector.js, creditCardDetector.js
-  │     └─► personDetector.js, organizationDetector.js, addressDetector.js, dobDetector.js
+Canonical Entity Key Generation (piiNormalizationService.js)
   │
   ▼
-Raw Candidate Entities
+Replacement Registry Lookup (replacementRegistry.js)
+  ├─► Existing Key? ──► Reuse Synthetic Replacement (Guarantees Consistency)
+  └─► New Key? ───────► Execute Type-Specific Generator (server/src/replacement/generators/)
+                          │
+                          ▼
+                    Collision Check (reverseMap verification)
+                          │
+                          ▼
+                    Store canonicalKey ↔ replacement mapping
   │
   ▼
-Validation & Invariant Layer (piiValidationService.js & allowlistService.js)
-  ├─► Schema Contract Check
-  ├─► Character Offset Invariant Verification (unitText.substring(start, end) === candidate.text)
-  ├─► Centralized Allowlist Exclusion Check
-  └─► Detector-Specific Rules (Luhn, IPv4, PIN/Address evidence, DOB context)
-  │
-  ├─► [Valid Candidates] ────► Normalization Service (piiNormalizationService.js)
-  │                                └── Computes normalizedValue comparison key
-  │
-  └─► [Invalid Candidates] ──► Logged to rejectedCandidates with Diagnostic Reason
+Replacement Plan Builder (replacementService.js)
+  ├── Group replacements by unitId
+  ├── Sort replacements per text unit by START DESCENDING
+  └── Track originalLength, replacementLength, and lengthDelta
   │
   ▼
-Overlap Resolver (resolveOverlaps by Rank: Specificity > Confidence > Length > Start)
-  │
-  ▼
-Deterministic Entity Sorter (start asc, end asc, type alpha)
-  │
-  ▼
-Canonical Contract Formatting (assigns unique id, text, start, end, normalizedValue, source metadata)
-  │
-  ▼
-Detection Audit Generator (piiAuditService.js)
-  └── Computes processedUnits, candidatesGenerated, rejectedByReason, duplicateOccurrences, canonicalEntities
-  │
-  ▼
-HTTP 200 OK JSON Response (Summary Counts + Audit Report + Safe Samples)
+HTTP 200 OK JSON Response (POST /api/documents/:documentId/replacement-plan)
+  └── Safe Metadata Summary + Sample Unit Plans
 ```

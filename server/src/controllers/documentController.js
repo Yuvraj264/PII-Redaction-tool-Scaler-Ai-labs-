@@ -126,8 +126,59 @@ const detectPii = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Generate synthetic PII replacement mapping plan for an ingested document
+ * @route   POST /api/documents/:documentId/replacement-plan
+ * @access  Public
+ */
+const generateReplacementPlan = async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+
+    if (!documentId) {
+      return res.status(400).json({
+        status: 'error',
+        statusCode: 400,
+        message: 'Document ID parameter is required.'
+      });
+    }
+
+    const replacementService = require('../replacement/replacementService');
+    const plan = await replacementService.generateReplacementPlan(documentId);
+
+    // Prepare safe sample unit plans preview (first 5 unit plans with masked original details)
+    const samplePlans = plan.unitPlans.slice(0, 5).map(up => ({
+      unitId: up.unitId,
+      unitType: up.unitType,
+      location: up.location,
+      replacementCount: up.replacements.length,
+      sampleReplacements: up.replacements.slice(0, 3).map(r => ({
+        type: r.type,
+        start: r.start,
+        end: r.end,
+        replacement: r.replacement,
+        lengthDelta: r.lengthDelta
+      }))
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: 'Synthetic replacement plan generated successfully',
+      replacementPlan: {
+        documentId: plan.documentId,
+        summary: plan.summary,
+        sampleCount: samplePlans.length,
+        samplePlans
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   uploadDocument,
   parseDocument,
-  detectPii
+  detectPii,
+  generateReplacementPlan
 };
