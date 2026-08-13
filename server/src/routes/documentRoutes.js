@@ -1,5 +1,12 @@
 const express = require('express');
-const { uploadDocument, parseDocument, detectPii, generateReplacementPlan } = require('../controllers/documentController');
+const { 
+  uploadDocument, 
+  parseDocument, 
+  detectPii, 
+  generateReplacementPlan,
+  redactDocument,
+  verifyRedaction
+} = require('../controllers/documentController');
 const { handleUpload } = require('../middleware/uploadMiddleware');
 
 const router = express.Router();
@@ -31,5 +38,19 @@ router.post('/:documentId/detect', detectPii);
  * @access  Public
  */
 router.post('/:documentId/replacement-plan', generateReplacementPlan);
+
+/**
+ * @route   POST /api/documents/:documentId/redact
+ * @desc    Generate redacted DOCX file for an ingested document
+ * @access  Public
+ */
+router.post('/:documentId/redact', redactDocument);
+
+/**
+ * @route   POST /api/documents/:documentId/verify-redaction
+ * @desc    Verify post-redaction PII leakage for an ingested document
+ * @access  Public
+ */
+router.post('/:documentId/verify-redaction', verifyRedaction);
 
 module.exports = router;

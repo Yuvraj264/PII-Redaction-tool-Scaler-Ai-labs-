@@ -176,9 +176,76 @@ const generateReplacementPlan = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Generate redacted DOCX file for an ingested document
+ * @route   POST /api/documents/:documentId/redact
+ * @access  Public
+ */
+const redactDocument = async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+
+    if (!documentId) {
+      return res.status(400).json({
+        status: 'error',
+        statusCode: 400,
+        message: 'Document ID parameter is required.'
+      });
+    }
+
+    const docxRedactionService = require('../services/docxRedactionService');
+    const result = await docxRedactionService.redactDocument(documentId);
+
+    return res.status(200).json({
+      success: true,
+      message: 'DOCX document redacted successfully',
+      redaction: {
+        documentId: result.documentId,
+        redactedFileName: result.redactedFileName,
+        totalReplacementsApplied: result.totalReplacementsApplied,
+        summary: result.summary
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Verify post-redaction PII leakage for an ingested document
+ * @route   POST /api/documents/:documentId/verify-redaction
+ * @access  Public
+ */
+const verifyRedaction = async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+
+    if (!documentId) {
+      return res.status(400).json({
+        status: 'error',
+        statusCode: 400,
+        message: 'Document ID parameter is required.'
+      });
+    }
+
+    const leakageScanner = require('../leakage/leakageScanner');
+    const report = await leakageScanner.scanRedactedDocument(documentId);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Post-redaction leakage audit completed successfully',
+      leakageReport: report
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   uploadDocument,
   parseDocument,
   detectPii,
-  generateReplacementPlan
+  generateReplacementPlan,
+  redactDocument,
+  verifyRedaction
 };

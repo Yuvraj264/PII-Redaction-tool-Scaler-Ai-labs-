@@ -97,6 +97,23 @@ class DocumentService {
       return false;
     }
   }
+
+  /**
+   * Retrieves document metadata object by document ID
+   * @param {string} documentId 
+   * @returns {Object|null} { documentId, filePath, originalName, size }
+   */
+  getDocumentMetadata(documentId) {
+    const filePath = this.findStoredFilePath(documentId);
+    if (!filePath) return null;
+    const stats = fs.statSync(filePath);
+    return {
+      documentId,
+      filePath,
+      originalName: `${documentId}.docx`,
+      size: stats.size
+    };
+  }
 }
 
 module.exports = new DocumentService();

@@ -9,6 +9,26 @@ const ReplacementRegistry = require('./replacementRegistry');
  */
 class ReplacementService {
   /**
+   * Helper to derive deterministic structural location key for a unit
+   * @param {Object} location 
+   * @param {string} unitType 
+   * @returns {string} e.g. "tbl-0-r-2-c-3-p-0" or "p-45"
+   */
+  getLocationKey(location, unitType) {
+    if (!location) return '';
+    if (unitType === 'paragraph') {
+      return `p-${location.paragraphIndex}`;
+    } else if (unitType === 'table-cell') {
+      return `tbl-${location.tableIndex}-r-${location.rowIndex}-c-${location.cellIndex}-p-${location.paragraphIndex || 0}`;
+    } else if (unitType === 'header') {
+      return `${location.headerId}-p-${location.paragraphIndex || 0}`;
+    } else if (unitType === 'footer') {
+      return `${location.footerId}-p-${location.paragraphIndex || 0}`;
+    }
+    return '';
+  }
+
+  /**
    * Generates a deterministic Replacement Plan for an ingested document
    * @param {string} documentId - Document identifier
    * @returns {Object} Structured Replacement Plan
@@ -21,7 +41,7 @@ class ReplacementService {
     // 2. Instantiate isolated registry for this document run
     const registry = new ReplacementRegistry();
 
-    // Group replacement items by text unit ID
+    // Group replacement items by text unit ID & location key
     const unitPlansMap = new Map();
 
     entities.forEach(entity => {
@@ -32,9 +52,12 @@ class ReplacementService {
       const regResult = registry.getOrCreateReplacement(canonicalKey, entity);
 
       const unitId = entity.source.unitId;
+      const locationKey = this.getLocationKey(entity.source.location, entity.source.unitType);
+
       if (!unitPlansMap.has(unitId)) {
         unitPlansMap.set(unitId, {
           unitId,
+          locationKey,
           unitType: entity.source.unitType,
           location: entity.source.location,
           replacements: []
@@ -64,7 +87,6 @@ class ReplacementService {
     });
 
     // 3. Sort replacements within each unit plan by START DESCENDING
-    // Order from end-of-string to beginning ensures downstream in-place substitution maintains earlier offsets
     const sortedUnitPlans = [];
 
     unitPlansMap.forEach(plan => {

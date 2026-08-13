@@ -273,6 +273,23 @@ class PiiDetectionService {
       audit: auditReport
     };
   }
+
+  /**
+   * Scans an array of structured text units for PII entities
+   * @param {Array<Object>} units 
+   * @param {string} documentId 
+   * @returns {Object} { entities }
+   */
+  detectPiiInUnits(units, documentId = 'custom') {
+    const allEntities = [];
+    if (Array.isArray(units)) {
+      units.forEach(unit => {
+        const unitResult = this.detectPiiInTextUnit(unit);
+        allEntities.push(...unitResult.validEntities);
+      });
+    }
+    return { entities: allEntities };
+  }
 }
 
 module.exports = new PiiDetectionService();

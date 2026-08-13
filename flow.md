@@ -31,16 +31,12 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **Synthetic Replacement Mapping Subsystem**:
   - `replacementRegistry.js` (Bidirectional canonicalKey ↔ replacement mapping with collision prevention)
   - `replacementService.js` (Replacement Plan builder & API service)
-  - **9 Type-Specific Synthetic Generators**:
-    - `personGenerator.js` (**PERSON** synthetic name pool)
-    - `emailGenerator.js` (**EMAIL** safe `@example.com` domain)
-    - `phoneGenerator.js` (**PHONE** reserved test range)
-    - `organizationGenerator.js` (**ORGANIZATION** synthetic legal entities)
-    - `addressGenerator.js` (**ADDRESS** synthetic physical addresses)
-    - `dobGenerator.js` (**DOB** synthetic birth dates)
-    - `ssnGenerator.js` (**SSN** test block `900-XX-XXXX`)
-    - `creditCardGenerator.js` (**CREDIT_CARD** Luhn test cards)
-    - `ipGenerator.js` (**IP_ADDRESS** RFC 5737 doc block)
+  - **9 Type-Specific Synthetic Generators**: `personGenerator.js`, `emailGenerator.js`, `phoneGenerator.js`, `organizationGenerator.js`, `addressGenerator.js`, `dobGenerator.js`, `ssnGenerator.js`, `creditCardGenerator.js`, `ipGenerator.js`
+- **OpenXML DOCX Redaction Engine** (`server/src/services/docxRedactionService.js` - `POST /api/documents/:documentId/redact`)
+- **Post-Redaction PII Leakage Scanner Subsystem**:
+  - `leakageScanner.js` (Reparse & 9-category rescan orchestrator)
+  - `leakageAnalyzer.js` (Residual entity classifier for Categories A-D)
+  - `leakageReport.js` (Leakage report assembler - `POST /api/documents/:documentId/verify-redaction`)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
 - **Document Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
 - **Temporary Upload Storage** (`server/uploads/` [Git-ignored])
@@ -49,11 +45,10 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **React Application Shell** (`client/src/App.jsx`)
 - **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated PII Detector, Audit & Replacement Test Suite** (`server/tests/test_execution_008.js`)
+- **Automated PII Detector, Audit, Replacement & Leakage Test Suite** (`server/tests/test_execution_010.js`)
 
 ### [PLANNED — NOT IMPLEMENTED]
-- **OpenXML DOCX Text Substitution Engine** (DOCX text node replacement planned for Execution 009)
-- **Evaluation & Validation Engine** (Precision/Recall metrics planned for Execution 010)
+- **Formal Precision/Recall Benchmark Evaluation Engine** (Gold-standard benchmark evaluation planned for future execution)
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
 - **Interactive PII Review UI** (Document preview & entity toggle UI planned for future execution)
 
@@ -115,75 +110,89 @@ Maps validated PII entities to realistic synthetic alternatives, guarantees 1-to
 
 ---
 
-### FLOW-008-A — Canonical Entity Creation
-- **Entry Point**: `piiNormalizationService.getCanonicalKey(type, text)`
-- **Input**: Validated PII entity type and text.
-- **Processing**: Derives canonical comparison key (`type:normalizedValue`) using type-specific normalization.
-- **Output**: Deterministic string key (e.g. `organization:ksh international limited`).
+## FLOW-010 — Post-Redaction PII Leakage Verification
+
+### Overview
+Performs independent post-redaction safety verification by reparsing generated redacted `.docx` files into structured text units, executing all 9 PII detectors, classifying residual entity findings into 4 distinct categories (A-D), checking direct exact/normalized original PII strings, verifying structural paragraph/table integrity, and compiling diagnostic Leakage Reports.
+
+---
+
+### FLOW-010-A — Redacted DOCX Reparse
+- **Entry Point**: `docxParserService.parseDocument(redactedFilePath, documentId)`
+- **Input**: Absolute path to generated redacted `.docx` archive (`server/uploads/:documentId_redacted.docx`).
+- **Processing**: Unzips archive, parses `word/document.xml`, `word/header*.xml`, `word/footer*.xml`, and extracts structured text units into memory.
+- **Validation**: Verifies file openability and XML well-formedness.
+- **Output**: Reparsed Structured Document Model.
+- **Failure Path**: Returns report status `FAIL` if unzipping or XML parsing fails.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-008-B — Replacement Registry Lookup & Registry Map
-- **Entry Point**: `replacementRegistry.getOrCreateReplacement(canonicalKey, entity)`
-- **Input**: Canonical key and entity object.
-- **Processing**:
-  1. Checks `canonicalMap` for existing key.
-  2. If found, reuses existing synthetic replacement (guarantees consistency across all document occurrences).
-  3. If not found, invokes type-specific generator and checks `reverseMap` for collisions.
-  4. Stores bidirectional mapping in registry.
-- **Output**: `{ canonicalKey, replacement, isReused }`.
+### FLOW-010-B — Full PII Rescan
+- **Entry Point**: `piiDetectionService.detectPiiInUnits(redactedDoc.content, documentId)`
+- **Input**: Reparsed text units array.
+- **Processing**: Runs all 9 detectors (**EMAIL**, **PHONE**, **IP_ADDRESS**, **SSN**, **CREDIT_CARD**, **PERSON**, **ORGANIZATION**, **ADDRESS**, **DOB**) against every reparsed text unit.
+- **Output**: Raw rescan candidate entities array.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-008-C — Synthetic Generator Selection
-- **Entry Point**: `generator.generate(entity, index)`
-- **Input**: PII entity and generator index counter.
-- **Processing**: Executes type-specific synthetic generator:
-  - `personGenerator`: Selects realistic synthetic names (`Arjun Mehta`, `Riya Sharma`).
-  - `emailGenerator`: Generates safe `@example.com` email (`arjun.mehta@example.com`).
-  - `phoneGenerator`: Generates reserved series Indian phone number (`+91 98765 01001`).
-  - `organizationGenerator`: Generates synthetic company preserving legal suffix (`Apex Meridian Technologies Private Limited`).
-  - `addressGenerator`: Generates multi-component synthetic address (`42 Industrial Estate Road...`).
-  - `dobGenerator`: Generates valid birth date (`1985-04-12`).
-  - `ssnGenerator`: Generates test SSN (`900-01-0001`).
-  - `creditCardGenerator`: Generates Luhn-valid test card (`4111-1111-1111-1111`).
-  - `ipGenerator`: Generates RFC 5737 IPv4 address (`192.0.2.1`).
-- **Output**: Synthetic replacement string.
+### FLOW-010-C — Original Entity Comparison
+- **Entry Point**: `leakageAnalyzer.classifyFinding()` original entity matching.
+- **Input**: Candidate entity text and `originalPiiNormalizedSet`.
+- **Processing**: Verifies whether candidate entity text or normalized comparison key matches an unredacted original PII value.
+- **Output**: Boolean match flag.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-008-D — Collision Prevention
-- **Entry Point**: `replacementRegistry.getOrCreateReplacement()` collision check loop.
-- **Input**: Candidate synthetic replacement string.
-- **Processing**: Checks `reverseMap.has(candidateReplacement)`. If collision detected or replacement equals original text, increments generator index counter until a unique replacement string is obtained.
-- **Output**: Collision-free synthetic replacement string.
+### FLOW-010-D — Synthetic Replacement Classification
+- **Entry Point**: `leakageAnalyzer.classifyFinding()` synthetic replacement matching.
+- **Input**: Candidate entity text and `syntheticReplacementsSet`.
+- **Processing**: Identifies if a detected candidate entity (e.g. "Arjun Mehta" detected as `PERSON` or "arjun.mehta@example.com" detected as `EMAIL`) is an expected synthetic replacement generated by the replacement engine.
+- **Output**: Classifies finding as `EXPECTED_SYNTHETIC_ENTITY` with `expectedSynthetic: true` and `severity: LOW` without failing the audit.
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-008-E — Replacement Plan Generation
-- **Entry Point**: `replacementService.generateReplacementPlan(documentId)`
+### FLOW-010-E — Residual PII Classification
+- **Entry Point**: `leakageAnalyzer.classifyFinding()`
+- **Input**: Rescan candidate entity.
+- **Processing**: Classifies finding into one of 4 categories:
+  - **CATEGORY A — EXPECTED_SYNTHETIC_ENTITY**: Synthetic replacement detected (`severity: LOW`).
+  - **CATEGORY B — CONFIRMED_LEAK**: Original PII value (raw or normalized) detected in redacted output (`severity: CRITICAL`).
+  - **CATEGORY C — NEW_UNINTENDED_PII**: Unintended sensitive value produced during replacement (`severity: HIGH`).
+  - **CATEGORY D — SCANNER_FALSE_POSITIVE**: False positive on non-PII term (`severity: LOW`).
+- **Output**: Category tag & severity.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-010-F — Leakage Severity & Status Determination
+- **Entry Point**: `leakageReportBuilder.buildReport()`
+- **Input**: Classified findings array and structural validation results.
+- **Processing**: Computes final report status:
+  - `status: "PASS"`: If `confirmedLeaksCount === 0` AND `reparsedSuccessfully === true`.
+  - `status: "FAIL"`: If `confirmedLeaksCount > 0` OR `reparsedSuccessfully === false`.
+- **Output**: Final status string (`PASS` or `FAIL`).
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-010-G — Structural Validation
+- **Entry Point**: `leakageScanner.scanRedactedDocument()` structural comparison step.
+- **Input**: Original vs Redacted structured document models.
+- **Processing**: Compares `originalParagraphs` vs `redactedParagraphs` and `originalTables` vs `redactedTables` to confirm document structural integrity.
+- **Output**: `structuralValidation` object.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-010-H — Diagnostic Leakage Report Generation
+- **Entry Point**: `POST /api/documents/:documentId/verify-redaction`
 - **Input**: Document ID.
-- **Processing**:
-  1. Retrieves valid PII entities from `piiDetectionService.detectPiiInDocument(documentId)`.
-  2. Maps each entity to synthetic replacement via `ReplacementRegistry`.
-  3. Groups replacement items by text unit ID (`unitId`).
-  4. Calculates length changes (`originalLength`, `replacementLength`, `lengthDelta`).
-  5. Assembles unit plans and summary metrics.
-- **Output**: Structured Replacement Plan JSON payload.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-008-F — Replacement Plan Descending Ordering
-- **Entry Point**: `replacementService.generateReplacementPlan()` sorting step.
-- **Input**: Unit plan replacements array.
-- **Processing**: Sorts replacements within each text unit plan by `start` offset **DESCENDING** (e.g. offset 100 before offset 20).
-- **Rationale**: Downstream in-place string replacement executed from end-of-string to beginning ensures earlier character offsets remain unaffected by length changes.
-- **Output**: Descending-sorted unit plans.
+- **Processing**: Executes `leakageScanner.scanRedactedDocument(documentId)` and returns structured JSON report.
+- **Output**: HTTP 200 OK JSON response containing safe summary metrics and leak lists.
 - **Status**: **[IMPLEMENTED]**
 
 ---
@@ -191,29 +200,31 @@ Maps validated PII entities to realistic synthetic alternatives, guarantees 1-to
 ### Comprehensive Data Flow Diagram
 
 ```
-Validated PII Entities (piiDetectionService.js)
+Redacted DOCX Archive (docxRedactionService.js)
   │
   ▼
-Canonical Entity Key Generation (piiNormalizationService.js)
+Reparse Engine (docxParserService.js)
   │
   ▼
-Replacement Registry Lookup (replacementRegistry.js)
-  ├─► Existing Key? ──► Reuse Synthetic Replacement (Guarantees Consistency)
-  └─► New Key? ───────► Execute Type-Specific Generator (server/src/replacement/generators/)
-                          │
-                          ▼
-                    Collision Check (reverseMap verification)
-                          │
-                          ▼
-                    Store canonicalKey ↔ replacement mapping
+Reparsed Text Units
   │
   ▼
-Replacement Plan Builder (replacementService.js)
-  ├── Group replacements by unitId
-  ├── Sort replacements per text unit by START DESCENDING
-  └── Track originalLength, replacementLength, and lengthDelta
+All 9 PII Detectors Rescan (piiDetectionService.js)
   │
   ▼
-HTTP 200 OK JSON Response (POST /api/documents/:documentId/replacement-plan)
-  └── Safe Metadata Summary + Sample Unit Plans
+Candidate Entities
+  │
+  ▼
+Residual Entity Classifier (leakageAnalyzer.js)
+  ├─► Matches Synthetic Replacement Set? ──► CATEGORY A: EXPECTED_SYNTHETIC_ENTITY (PASS)
+  ├─► Matches Original PII Set? ───────────► CATEGORY B: CONFIRMED_LEAK (FAIL - CRITICAL)
+  ├─► Unintended Deterministic PII? ────────► CATEGORY C: NEW_UNINTENDED_PII (HIGH)
+  └─► Allowlisted / Non-PII Term? ──────────► CATEGORY D: SCANNER_FALSE_POSITIVE (LOW)
+  │
+  ▼
+Structural Validation Engine (originalParagraphs vs redactedParagraphs, originalTables vs redactedTables)
+  │
+  ▼
+Diagnostic Leakage Report (POST /api/documents/:documentId/verify-redaction)
+  └── Returns status: PASS / FAIL + Safe Metadata Summary Metrics + Leaks List
 ```
