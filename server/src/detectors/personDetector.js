@@ -259,25 +259,16 @@ class PersonDetector {
         const context = getSurroundingContext(text, start, end, 50);
         const hasRole = hasPersonTitleOrRole(context.beforeText) || hasPersonTitleOrRole(context.afterText);
 
-        // If header unit, require explicit role/title context
-        if (isHeader && !hasRole) {
-          continue;
-        }
-
-        // If context has a title/role OR candidate has 2+ words (first & last name)
-        const wordCount = candName.split(/\s+/).length;
-        if (hasRole || wordCount >= 2) {
-          const confidence = hasRole ? 0.95 : 0.85;
-          if (text.substring(start, end) === candName) {
-            rawMatches.push({
-              type: this.type,
-              text: candName,
-              start,
-              end,
-              confidence,
-              detector: 'person'
-            });
-          }
+        // Require explicit title/role context signal OR honorific prefix for Title-Case matches
+        if (hasRole) {
+          rawMatches.push({
+            type: this.type,
+            text: candName,
+            start,
+            end,
+            confidence: 0.95,
+            detector: 'person'
+          });
         }
       }
     }

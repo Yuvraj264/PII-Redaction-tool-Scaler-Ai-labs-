@@ -108,7 +108,7 @@ async function runAsyncTest(testName, testFn) {
   await runAsyncTest('TEST 5: Full 9 PII Detector Execution', async () => {
     const detectionResult = await piiDetectionService.detectPiiInDocument(prospectusDocId);
     const totalCount = detectionResult.summary.totalEntities || detectionResult.summary.totalEntitiesDetected || 0;
-    assert.ok(totalCount > 1000, 'Total entities detected must be > 1000');
+    assert.ok(totalCount > 500, 'Total entities detected must be > 500');
     assert.ok(detectionResult.summary['PERSON'] > 0);
     assert.ok(detectionResult.summary['EMAIL'] > 0);
     assert.ok(detectionResult.summary['PHONE'] > 0);

@@ -19,6 +19,15 @@ class OrganizationDetector {
       'BY', 'FOR', 'WITH', 'IN', 'ON', 'AT', 'TO', 'OF', 'AND', 'OR', 'THE', 'A', 'AN',
       'SECTION', 'TABLE', 'CHAPTER', 'ANNEXURE', 'SCHEDULE', 'ACT'
     ]);
+
+    // Non-company generic phrases matching suffix terms
+    this.genericNonCompanyPhrases = new Set([
+      'RISK MANAGEMENT', 'ISSUE MANAGEMENT', 'WORKING CAPITAL', 'LEAD MANAGER SERVICES',
+      'STATUTORY ADVISORY', 'FINANCIAL SERVICES', 'PUBLIC HOLDINGS', 'EQUITY SECURITIES',
+      'BOOK RUNNING LEAD MANAGERS', 'COMPLIANCE OFFICER SERVICES', 'REGISTRAR SERVICES',
+      'AUDITORS REPORT', 'BOARD OF DIRECTORS', 'KEY MANAGERIAL PERSONNEL', 'SECRETARIAL AUDIT',
+      'CORPORATE GOVERNANCE', 'STATEMENT OF CAPITAL', 'DESCRIPTION OF BUSINESS', 'SUMMARY OF ISSUE'
+    ]);
   }
 
   /**
@@ -30,7 +39,13 @@ class OrganizationDetector {
     if (!candidate || candidate.length < 3) return false;
 
     const trimmed = candidate.trim();
+    const upper = trimmed.toUpperCase();
+
     if (isAllowlistedOrganization(trimmed)) {
+      return false;
+    }
+
+    if (this.genericNonCompanyPhrases.has(upper)) {
       return false;
     }
 

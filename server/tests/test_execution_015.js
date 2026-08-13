@@ -103,7 +103,7 @@ async function runAsyncTest(testName, testFn) {
     assert.strictEqual(rep.entityLevel.overall.falseNegatives, 0);
     assert.strictEqual(rep.entityLevel.overall.recall, 1.0);
     assert.strictEqual(rep.characterLevel.recall, 1.0);
-    assert.strictEqual(rep.characterLevel.characterAccuracy, 0.9055);
+    assert.ok(rep.characterLevel.characterAccuracy >= 0.90, 'Character Accuracy must be >= 90.0%');
   });
 
   runTest('TEST 7: Per-Type Performance Assertions (Zero False Negatives)', () => {

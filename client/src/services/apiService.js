@@ -60,11 +60,33 @@ export async function detectPii(documentId) {
   });
 
   const data = await handleResponse(response);
+  const det = data.detection || data;
+  const summaryObj = det.summary || {};
+
+  const total = summaryObj.totalEntities !== undefined 
+    ? summaryObj.totalEntities 
+    : (summaryObj.totalEntitiesDetected !== undefined ? summaryObj.totalEntitiesDetected : 0);
+
+  const breakdownObj = {
+    PERSON: summaryObj.PERSON !== undefined ? summaryObj.PERSON : (summaryObj.breakdown?.PERSON || 0),
+    EMAIL: summaryObj.EMAIL !== undefined ? summaryObj.EMAIL : (summaryObj.breakdown?.EMAIL || 0),
+    PHONE: summaryObj.PHONE !== undefined ? summaryObj.PHONE : (summaryObj.breakdown?.PHONE || 0),
+    ORGANIZATION: summaryObj.ORGANIZATION !== undefined ? summaryObj.ORGANIZATION : (summaryObj.breakdown?.ORGANIZATION || 0),
+    ADDRESS: summaryObj.ADDRESS !== undefined ? summaryObj.ADDRESS : (summaryObj.breakdown?.ADDRESS || 0),
+    DOB: summaryObj.DOB !== undefined ? summaryObj.DOB : (summaryObj.breakdown?.DOB || 0),
+    SSN: summaryObj.SSN !== undefined ? summaryObj.SSN : (summaryObj.breakdown?.SSN || 0),
+    CREDIT_CARD: summaryObj.CREDIT_CARD !== undefined ? summaryObj.CREDIT_CARD : (summaryObj.breakdown?.CREDIT_CARD || 0),
+    IP_ADDRESS: summaryObj.IP_ADDRESS !== undefined ? summaryObj.IP_ADDRESS : (summaryObj.breakdown?.IP_ADDRESS || 0)
+  };
+
   return {
-    documentId: data.documentId,
-    summary: data.summary,
-    totalEntitiesDetected: data.summary ? data.summary.totalEntitiesDetected : (data.entities ? data.entities.length : 0),
-    breakdown: data.summary ? data.summary.breakdown : {}
+    documentId: det.documentId || documentId,
+    summary: {
+      totalEntitiesDetected: total,
+      breakdown: breakdownObj
+    },
+    totalEntitiesDetected: total,
+    breakdown: breakdownObj
   };
 }
 

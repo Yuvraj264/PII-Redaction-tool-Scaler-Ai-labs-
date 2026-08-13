@@ -110,12 +110,29 @@ const detectPii = async (req, res, next) => {
       sourceLocation: e.source.location
     }));
 
+    const summaryPayload = {
+      totalEntitiesDetected: detectionResult.summary.totalEntities || 0,
+      totalEntities: detectionResult.summary.totalEntities || 0,
+      breakdown: {
+        PERSON: detectionResult.summary.PERSON || 0,
+        EMAIL: detectionResult.summary.EMAIL || 0,
+        PHONE: detectionResult.summary.PHONE || 0,
+        ORGANIZATION: detectionResult.summary.ORGANIZATION || 0,
+        ADDRESS: detectionResult.summary.ADDRESS || 0,
+        DOB: detectionResult.summary.DOB || 0,
+        SSN: detectionResult.summary.SSN || 0,
+        CREDIT_CARD: detectionResult.summary.CREDIT_CARD || 0,
+        IP_ADDRESS: detectionResult.summary.IP_ADDRESS || 0
+      },
+      ...detectionResult.summary
+    };
+
     return res.status(200).json({
       success: true,
       message: 'PII detection executed successfully',
       detection: {
         documentId: detectionResult.documentId,
-        summary: detectionResult.summary,
+        summary: summaryPayload,
         audit: detectionResult.audit,
         sampleCount: sampleEntities.length,
         samples: sampleEntities

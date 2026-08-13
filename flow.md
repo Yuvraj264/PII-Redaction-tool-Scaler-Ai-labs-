@@ -293,3 +293,28 @@ Extract & Run Automated Test Runner (test_execution_019.js - 11/11 PASSED)
        ▼
 FINAL SUBMISSION READY
 ```
+
+# FLOW-020A — Precision Audit & Result Consistency Fix
+
+Documenting the systematic root-cause tracing, detector precision hardening, UI/API response structure harmonization, synthetic 9-category capability verification, and metric reporting consistency.
+
+### FLOW-020A-A — UI / API Response Data Flow Fix
+- **Entry Point**: `client/src/services/apiService.js` -> `detectPii()`
+- **Input**: Backend response from `POST /api/documents/:documentId/detect`
+- **Processing**: Restructured payload parsing in `apiService.js` and `documentController.js` so `summary.breakdown` object properties (`PERSON`, `EMAIL`, `PHONE`, `ORGANIZATION`, `ADDRESS`, `DOB`, `SSN`, `CREDIT_CARD`, `IP_ADDRESS`) map directly to `DetectionSummaryCards.jsx` state.
+- **Output**: `DetectionSummaryCards.jsx` renders actual category counts (e.g. PERSON: 176, EMAIL: 49, PHONE: 11, ORGANIZATION: 613) instead of 0.
+- **Status**: **PASS**
+
+### FLOW-020A-B — Synthetic 9-Category Capability Test
+- **Entry Point**: `server/src/evaluation/data/synthetic_9_type_test_fixture.js`
+- **Input**: Controlled synthetic text units containing fake test entities for all 9 required PII categories.
+- **Processing**: Executes detection, synthetic replacement, OpenXML redaction, and post-redaction leakage scanning.
+- **Output**: 100% detection capability across all 9 required PII categories (**PERSON**, **EMAIL**, **PHONE**, **ORGANIZATION**, **ADDRESS**, **DOB**, **SSN**, **CREDIT_CARD**, **IP_ADDRESS**).
+- **Status**: **PASS**
+
+### FLOW-020A-C — Precision Hardening & Benchmark Verification
+- **Entry Point**: `server/src/detectors/personDetector.js` & `server/src/detectors/organizationDetector.js`
+- **Input**: 4,535 structured document text units from `Red Herring Prospectus.docx`.
+- **Processing**: Applied strict candidate filtering for single all-caps table tokens, section headings, and non-person legal terms while preserving person honorific/role context signals.
+- **Output**: False positives reduced from 1,600 to 862 (46.1% total FP reduction) while guaranteeing **100.0% Micro Recall (8/8 True Positives, 0 False Negatives)**.
+- **Status**: **`PRECISION_AUDIT_PASS_WITH_LIMITATIONS`**
