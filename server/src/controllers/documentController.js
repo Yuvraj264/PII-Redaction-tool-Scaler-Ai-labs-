@@ -336,6 +336,57 @@ const downloadRedactedDocument = async (req, res, next) => {
     }
 
     const downloadFileName = `${docMeta.originalName.replace(/\.docx$/i, '')}_redacted.docx`;
+
+    // Atomic pre-download DOCX validation
+    const stats = fs.statSync(redactedFilePath);
+    if (stats.size === 0) {
+      return res.status(500).json({
+        status: 'error',
+        statusCode: 500,
+        message: 'Redacted file is empty (0 bytes).'
+      });
+    }
+
+    // Inspect ZIP magic header signature (PK\x03\x04)
+    const buf = Buffer.alloc(4);
+    const fd = fs.openSync(redactedFilePath, 'r');
+    fs.readSync(fd, buf, 0, 4, 0);
+    fs.closeSync(fd);
+
+    if (buf[0] !== 0x50 || buf[1] !== 0x4B || buf[2] !== 0x03 || buf[3] !== 0x04) {
+      return res.status(500).json({
+        status: 'error',
+        statusCode: 500,
+        message: 'Redacted file does not contain a valid ZIP magic header.'
+      });
+    }
+
+    // Inspect OpenXML ZIP contents
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(redactedFilePath);
+    const contentTypesEntry = zip.getEntry('[Content_Types].xml');
+    const documentXmlEntry = zip.getEntry('word/document.xml');
+
+    if (!contentTypesEntry || !documentXmlEntry) {
+      return res.status(500).json({
+        status: 'error',
+        statusCode: 500,
+        message: 'Redacted file is missing required OpenXML entries ([Content_Types].xml or word/document.xml).'
+      });
+    }
+
+    // Inspect word/document.xml XML DOM parsing
+    const { DOMParser } = require('@xmldom/xmldom');
+    const xmlText = documentXmlEntry.getData().toString('utf8');
+    const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+    if (!doc || !doc.documentElement || doc.documentElement.nodeName !== 'w:document') {
+      return res.status(500).json({
+        status: 'error',
+        statusCode: 500,
+        message: 'Redacted document.xml failed XML DOM validation.'
+      });
+    }
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadFileName)}"`);
     return res.download(redactedFilePath, downloadFileName);

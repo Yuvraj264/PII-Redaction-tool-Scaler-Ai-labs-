@@ -153,9 +153,20 @@ export function getDownloadUrl(documentId) {
 export async function downloadRedactedFile(documentId, originalName = 'Red_Herring_Prospectus.docx') {
   const url = getDownloadUrl(documentId);
   const response = await fetch(url);
+
   if (!response.ok) {
-    throw new Error(`Download failed with status ${response.status}`);
+    let errorMsg = `Download failed with status ${response.status}`;
+    try {
+      const errJson = await response.json();
+      if (errJson && errJson.message) {
+        errorMsg = errJson.message;
+      }
+    } catch (e) {
+      // Non-JSON error
+    }
+    throw new Error(errorMsg);
   }
+
   const blob = await response.blob();
   const docxBlob = new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   const blobUrl = window.URL.createObjectURL(docxBlob);

@@ -318,3 +318,22 @@ Documenting the systematic root-cause tracing, detector precision hardening, UI/
 - **Processing**: Applied strict candidate filtering for single all-caps table tokens, section headings, and non-person legal terms while preserving person honorific/role context signals.
 - **Output**: False positives reduced from 1,600 to 862 (46.1% total FP reduction) while guaranteeing **100.0% Micro Recall (8/8 True Positives, 0 False Negatives)**.
 - **Status**: **`PRECISION_AUDIT_PASS_WITH_LIMITATIONS`**
+
+# FLOW-020C — DOCX Download & Openability Fix
+
+Documenting pre-download ZIP magic header signature verification, OpenXML structure validation, response MIME headers, frontend Blob handling, and native openability verification.
+
+### FLOW-020C-A — Pre-Download DOCX Package Structural Validation
+- **Entry Point**: `server/src/controllers/documentController.js` -> `downloadRedactedDocument()`
+- **Input**: Redacted DOCX file in `server/uploads/`
+- **Processing**: Validates file size $> 0$, ZIP magic bytes `0x504B0304` (`PK\x03\x04`), OpenXML package entries (`[Content_Types].xml` and `word/document.xml`), and XML DOM root node `w:document`.
+- **Output**: Serves binary with MIME `application/vnd.openxmlformats-officedocument.wordprocessingml.document` and `Content-Disposition`. Returns HTTP 500 JSON error if validation fails.
+- **Status**: **PASS**
+
+### FLOW-020C-B — Frontend Error-Safe Blob Download Trigger
+- **Entry Point**: `client/src/services/apiService.js` -> `downloadRedactedFile()`
+- **Input**: `GET /api/documents/:documentId/download` API response
+- **Processing**: Checks `response.ok`; if false, parses server JSON error message and displays toast alert. If true, wraps binary stream in native DOCX Blob and programmatically triggers `.docx` file download.
+- **Output**: Native Microsoft Word `.docx` file saved to disk and opened cleanly in Microsoft Word / LibreOffice.
+- **Status**: **PASS**
+
