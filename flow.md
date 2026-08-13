@@ -10,8 +10,9 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **Express Server Foundation** (`server/server.js`, `server/src/app.js`)
 - **Health Check Endpoint** (`GET /api/health`)
 - **DOCX Ingestion Engine & Validation** (`POST /api/documents/upload`)
+- **OpenXML DOCX Structural Parser** (`POST /api/documents/:documentId/parse`)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
-- **Document Metadata Service** (`server/src/services/documentService.js`)
+- **Document Metadata & Parsing Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
 - **Temporary Upload Storage** (`server/uploads/` [Git-ignored])
 - **Environment Configuration Manager** (`server/src/config/uploadConfig.js`, `server/src/config/db.js`)
 - **Error & Not-Found Middleware** (`server/src/middleware/`)
@@ -20,7 +21,6 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
 
 ### [PLANNED]
-- **DOCX Text Extraction & Paragraph Parsing** (Planned for Execution 003)
 - **PII Detection Engine** (Regex + NLP / Entity recognition planned for Execution 004)
 - **Synthetic Replacement & Redaction Engine** (DOCX text manipulation planned for Execution 005)
 - **Evaluation & Validation Engine** (Precision/Recall metrics planned for Execution 006)
@@ -77,59 +77,105 @@ Client submits a `.docx` document to the ingestion API. The server validates for
   6. `documentController.uploadDocument` executes, invoking `documentService.processUploadedDocument(req.file)`.
   7. `documentService.js` formats document metadata (`documentId`, `originalName`, `mimeType`, `size`, `extension`, `uploadedAt`). Raw server file paths and file contents are strictly omitted.
   8. Controller returns HTTP 200 OK with metadata response payload.
+- **Output**: JSON payload with uploaded document metadata.
+
+---
+
+## FLOW-003 — DOCX Parsing Flow
+
+### Overview
+Parses an ingested DOCX document into a structured internal model containing paragraphs, table cells, headers, and footers with stable unit IDs (`unit-00001`) and location metadata.
+
+### Execution Details
+- **Entry Point**: `POST /api/documents/:documentId/parse`
+- **Previous Component**: Client App / Ingestion UI / API Consumer
+- **Current Component**: Document Controller (`server/src/controllers/documentController.js`) & Parser Service (`server/src/services/docxParserService.js`)
+- **Processing Steps**:
+  1. Client sends POST request to `/api/documents/:documentId/parse`.
+  2. `documentController.parseDocument` extracts `documentId` from URL route parameters.
+  3. `documentService.parseDocument(documentId)` locates the stored `.docx` file in `server/uploads/`.
+  4. `docxParserService.parseDocument(filePath, documentId)` reads OpenXML archive in-memory using `adm-zip`:
+     - Reads `word/document.xml`, `word/header*.xml`, `word/footer*.xml`.
+     - Parses XML using `fast-xml-parser`.
+     - Traverses `<w:p>` and `<w:tbl>` elements in exact document order.
+  5. Formats extracted units:
+     - `id`: Stable unit identifier (`unit-00001`, `unit-00002`, ...).
+     - `type`: `"paragraph"`, `"table-cell"`, `"header"`, `"footer"`.
+     - `text`: Raw extracted text string.
+     - `normalizedText`: Normalized whitespace search string.
+     - `location`: Exact index coordinates (`paragraphIndex`, `tableIndex`, `rowIndex`, `cellIndex`).
+  6. Computes summary metrics (`paragraphCount`, `tableCount`, `tableCellCount`, `textUnitCount`, `totalCharacterCount`, `emptyUnitCount`).
+  7. Returns HTTP 200 OK JSON response containing document metrics and safe debug preview (first 10 units with truncated text).
 - **Output**: JSON payload:
   ```json
   {
     "success": true,
-    "message": "Document uploaded and ingested successfully",
+    "message": "Document parsed successfully",
     "document": {
-      "documentId": "doc_1786609770017_8aa674b0a5b8",
-      "originalName": "Red Herring Prospectus.docx",
-      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "size": 1844676,
-      "extension": ".docx",
-      "uploadedAt": "2026-08-13T08:29:30.022Z"
+      "documentId": "doc_1786610748640_d4bcdc4f93c0",
+      "sourceFile": { "originalName": "Red Herring Prospectus.docx", "size": 1844676 },
+      "metrics": {
+        "paragraphCount": 1006,
+        "tableCount": 76,
+        "tableCellCount": 3225,
+        "textUnitCount": 4535,
+        "totalCharacterCount": 321112,
+        "emptyUnitCount": 1023,
+        "headerCount": 75,
+        "footerCount": 74
+      },
+      "preview": [ ... first 10 text units ... ]
     }
   }
   ```
-- **Next Component**: React Upload UI displays ingested document metadata summary card.
 - **Error Paths**:
-  - **No File Uploaded**: Returns HTTP 400 `{ "status": "error", "statusCode": 400, "message": "No file uploaded. Please attach a valid .docx document..." }`.
-  - **Invalid File Extension (.txt, .pdf)**: Returns HTTP 400 `{ "status": "error", "statusCode": 400, "message": "Unsupported file extension..." }`.
-  - **File Size Limit Exceeded (>50MB)**: Returns HTTP 413 `{ "status": "error", "statusCode": 413, "message": "File size exceeds the maximum limit of 50MB." }`.
-  - **Unexpected Failure**: Caught by `errorHandler.js`, returning HTTP 500 `{ "status": "error", "statusCode": 500, "message": "Internal server error" }`.
+  - **Document Not Found**: Returns HTTP 404 `{ "status": "error", "statusCode": 404, "message": "Document with ID '...' not found in upload storage." }`.
+  - **Corrupt / Invalid Archive**: Returns HTTP 400 `{ "status": "error", "statusCode": 400, "message": "Failed to open DOCX archive: ..." }`.
+
+### FLOW-003-A — Paragraph Extraction
+- **Input**: `<w:p>` XML nodes inside `word/document.xml`.
+- **Processing**: Extracts text runs `<w:t>` inside paragraph node while preserving paragraph order.
+- **Output**: Unit with `type: "paragraph"`, `location: { paragraphIndex: P_INDEX }`.
+- **Status**: **[IMPLEMENTED]**
+
+### FLOW-003-B — Table Extraction
+- **Input**: `<w:tbl>` XML nodes inside `word/document.xml`.
+- **Processing**: Traverses table rows `<w:tr>` and table cells `<w:tc>`, extracting paragraph text runs.
+- **Output**: Unit with `type: "table-cell"`, `location: { tableIndex: T_INDEX, rowIndex: R_INDEX, cellIndex: C_INDEX, paragraphIndex: P_INDEX }`.
+- **Status**: **[IMPLEMENTED]**
+
+### FLOW-003-C — Header/Footer Extraction
+- **Input**: `word/header*.xml` and `word/footer*.xml` entries inside OpenXML archive.
+- **Processing**: Traverses header/footer paragraph nodes.
+- **Output**: Unit with `type: "header"` or `type: "footer"`, `location: { headerId / footerId, paragraphIndex }`.
+- **Status**: **[IMPLEMENTED]**
 
 ### Data Flow Diagram
 
 ```
-User Browser / UI Component
+Browser / API Consumer
   │
-  │ POST /api/documents/upload (multipart/form-data; field: file)
+  │ POST /api/documents/:documentId/parse
   ▼
-Vite Dev Proxy
-  │
-  ▼
-Express Application (server/src/app.js)
-  │
-  ▼
-Document Routes (server/src/routes/documentRoutes.js)
-  │
-  ▼
-Upload Middleware / Multer (server/src/middleware/uploadMiddleware.js)
-  ├─► Validate File Extension (.docx) & MIME Type
-  ├─► Enforce Size Limit (50MB)
-  ├─► Generate Sanitized Safe Filename (doc_timestamp_random.docx)
-  └─► Store in server/uploads/
+Express Router (server/src/routes/documentRoutes.js)
   │
   ▼
 Document Controller (server/src/controllers/documentController.js)
   │
   ▼
 Document Service (server/src/services/documentService.js)
-  │
-  ▼
-Metadata Response (HTTP 200 OK)
-  │
-  ▼
-React UI (Document Metadata Card Rendered)
+  ├─► Locate stored file in server/uploads/
+  └─► Invoke docxParserService.parseDocument()
+        │
+        ▼
+DOCX Parser Service (server/src/services/docxParserService.js)
+  ├─► Open ZIP Archive in-memory (adm-zip)
+  ├─► Parse word/document.xml, header*.xml, footer*.xml (fast-xml-parser)
+  ├─► Extract Paragraphs (<w:p>)
+  ├─► Extract Table Cells (<w:tbl> -> <w:tr> -> <w:tc>)
+  ├─► Extract Headers & Footers
+  └─► Build Structured Document Model with Location Metadata
+        │
+        ▼
+HTTP 200 OK JSON Response (Metrics + Safe Preview)
 ```

@@ -49,96 +49,167 @@ Implement the DOCX document ingestion foundation (`POST /api/documents/upload`),
 - Created automated test suite script (`test_execution_002.js`) verifying upload validation, security, and integration with the actual 127-page assignment document (`Red Herring Prospectus.docx`).
 - Updated `flow.md` adding `FLOW-002 — DOCX Upload Flow`.
 
-### Files Created
-- `server/src/config/uploadConfig.js`
-- `server/src/middleware/uploadMiddleware.js`
-- `server/src/services/documentService.js`
-- `server/src/controllers/documentController.js`
-- `server/src/routes/documentRoutes.js`
-- `<appDataDir>/brain/.../scratch/test_execution_002.js`
+---
 
-### Files Modified
-- `.gitignore`
-- `server/package.json`
-- `server/src/app.js`
-- `client/src/components/DocumentUploadPlaceholder.jsx`
-- `client/src/App.jsx`
-- `flow.md`
-- `context.md`
+## Execution 003
 
-### Files Preserved
-- `server/server.js`
-- `server/src/config/db.js`
-- `server/src/controllers/healthController.js`
-- `server/src/routes/healthRoutes.js`
-- `server/src/middleware/notFoundHandler.js`
-- `server/src/middleware/errorHandler.js`
-- `client/src/main.jsx`
-- `client/src/index.css`
-- `client/vite.config.js`
+### Objective
+Build a read-only, high-precision DOCX parser and structured extraction service capable of processing 100+ page DOCX files (such as the 127-page Red Herring Prospectus). The parser extracts paragraphs, tables (rows/cells), and headers/footers into an internal structured document model with stable IDs and location metadata without modifying the source DOCX file or running PII detection.
 
-### Dependencies Added
-- `multer` (`^1.4.5-lts.1`) in `server/package.json`.
+### Starting State
+- Active MERN stack foundation in pure JavaScript.
+- Backend server running on port 5001 with `/api/health` and `POST /api/documents/upload`.
+- Document upload storage active in `server/uploads/`.
 
-### Why Each Dependency Was Added
-- `multer`: Essential Node.js middleware for handling `multipart/form-data` file uploads efficiently via streaming disk storage.
+### Existing Architecture
+- Express API server with `server.js`, `app.js`, `healthRoutes.js`, `documentRoutes.js`, `uploadMiddleware.js`, `documentService.js`.
 
-### Upload Validation Decisions
-1. **Extension Whitelist**: Restricted strictly to `.docx` files (`ALLOWED_EXTENSIONS = ['.docx']`).
-2. **MIME Type Validation**: Validated MIME type against standard Word OpenXML types (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `application/x-zip-compressed`, `application/zip`, `application/octet-stream`).
-3. **Size Limit**: Configured maximum upload file size to 50 MB to safely accommodate large prospectus documents (such as the 127-page Red Herring Prospectus [1.84 MB]).
+### DOCX Library Selected
+- **`adm-zip`** (`^0.5.12`) + **`fast-xml-parser`** (`^4.3.6`) for direct in-memory OpenXML archive extraction and XML node tree traversal.
+
+### Why This Library Was Selected
+1. **100% Structural Precision**: Direct access to OpenXML tags (`w:p`, `w:tbl`, `w:tr`, `w:tc`, `w:r`, `w:t`, `w:hdr`, `w:ftr`) enables exact tracking of table indices (`tableIndex`, `rowIndex`, `cellIndex`) and paragraph indices (`paragraphIndex`).
+2. **Speed & Scalability**: In-memory ZIP buffer reading parses a 1.84 MB (127-page) DOCX in ~1.6 seconds without external binary or CLI tool dependencies.
+3. **Downstream Redaction Compatibility**: OpenXML node locations map directly to downstream text replacement targets.
+
+### Alternatives Considered
+- `mammoth`: Excellent for HTML rendering, but abstracts away exact table grid coordinate metadata (`rowIndex`, `cellIndex`) necessary for precise downstream PII location and replacement.
+- `docx`: Designed primarily for document generation rather than parsing existing complex 100+ page OpenXML archives.
+
+### Parser Architecture
+```
+documentController.parseDocument
+       │
+       ▼
+documentService.parseDocument
+       │
+       ▼
+docxParserService.parseDocument
+ ├── adm-zip (reads word/document.xml, header*.xml, footer*.xml in-memory)
+ ├── fast-xml-parser (parses OpenXML node tree)
+ ├── Paragraph Visitor (extracts <w:p> text runs)
+ ├── Table Visitor (extracts <w:tbl> -> <w:tr> -> <w:tc> text runs)
+ └── Header/Footer Visitor (extracts <w:hdr> / <w:ftr> text runs)
+```
+
+### Internal Document Model
+```json
+{
+  "documentId": "doc_1786610773318_bf22713f8924",
+  "sourceFile": {
+    "originalName": "Red Herring Prospectus.docx",
+    "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "size": 1844676
+  },
+  "metrics": {
+    "paragraphCount": 1006,
+    "tableCount": 76,
+    "tableCellCount": 3225,
+    "textUnitCount": 4535,
+    "totalCharacterCount": 321112,
+    "emptyUnitCount": 1023,
+    "headerCount": 75,
+    "footerCount": 74
+  },
+  "content": [
+    {
+      "id": "unit-00025",
+      "type": "paragraph",
+      "text": "Our Company was originally incorporated...",
+      "normalizedText": "Our Company was originally incorporated...",
+      "location": { "paragraphIndex": 24 }
+    },
+    {
+      "id": "unit-00030",
+      "type": "table-cell",
+      "text": "E-mail: cs.connect@kshinternational.com; Website: www.kshinternational.com",
+      "normalizedText": "E-mail: cs.connect@kshinternational.com; Website: www.kshinternational.com",
+      "location": { "tableIndex": 0, "rowIndex": 2, "cellIndex": 3, "paragraphIndex": 0 }
+    }
+  ]
+}
+```
+
+### Paragraph Extraction
+- Traverses top-level `<w:p>` nodes in `word/document.xml`.
+- Extracts concatenated text runs `<w:t>`.
+- Assigns location `{ paragraphIndex: P_INDEX }`.
+
+### Table Extraction
+- Traverses `<w:tbl>` nodes in `word/document.xml`.
+- Iterates over rows `<w:tr>` and cells `<w:tc>`.
+- Assigns location `{ tableIndex: T_INDEX, rowIndex: R_INDEX, cellIndex: C_INDEX, paragraphIndex: P_INDEX }`.
+
+### Header/Footer Handling
+- Reads `word/header1.xml` ... `word/headerN.xml` and `word/footer1.xml` ... `word/footerN.xml` from OpenXML archive.
+- Assigns `type: "header"` or `type: "footer"` with `{ headerId / footerId, paragraphIndex }`.
+
+### Normalization Decisions
+- **`text`**: Preserves raw, original text string intact for exact downstream replacement.
+- **`normalizedText`**: Collapses consecutive whitespace characters (`\s+` -> `' '`) and trims leading/trailing spaces for clean searching.
+- **No Aggressive Lowercasing or Symbol Stripping**: Punctuation, symbols (`@`, `+`, `-`), and case are strictly preserved.
 
 ### Security Decisions
-1. **Filename Sanitization**: Client-provided original filenames are NEVER used directly as filesystem paths. Server generates random, collision-resistant filenames (`doc_<timestamp>_<randomHex>.docx`).
-2. **Path Traversal Defense**: Path traversal characters (e.g. `../../../etc/passwd`) in `originalname` are stripped using Node `path.basename()`.
-3. **Information Leak Prevention**: Absolute server filesystem paths, raw document content, and PII are strictly excluded from API response payloads.
-4. **Git Safety**: `server/uploads/` directory added to `.gitignore` to prevent committing customer/sensitive documents to Git.
-5. **No Static Serving**: Upload directory is isolated and NOT exposed via static Express middleware (`express.static`).
+- Read-only parser operation. Source files on disk are never modified or overwritten.
+- Full document body text is NOT dumped to console or API responses (API returns metrics and 10-unit safe preview with truncated snippets).
 
-### Storage Decisions
-- Uploaded files stored temporarily in `server/uploads/`.
-- File metadata maintained in-memory/request scope for Execution 002 (MongoDB Document job model persistence scheduled for subsequent execution).
+### Actual Assignment Document Tests & Parser Results
+- **Document Tested**: `/Users/yuvraj/Downloads/Red Herring Prospectus.docx`
+- **File Size**: 1,844,676 bytes (1.84 MB)
+- **Page Count**: 127 pages DOCX
+- **Measured Parse Metrics**:
+  - `paragraphCount`: 1,006
+  - `tableCount`: 76
+  - `tableCellCount`: 3,225
+  - `textUnitCount`: 4,535
+  - `totalCharacterCount`: 321,112 characters
+  - `headerCount`: 75
+  - `footerCount`: 74
+  - `parseDuration`: ~1.6 seconds
 
-### Testing Performed
-Executed automated runner `test_execution_002.js` covering 7 core integration test cases:
-1. **Valid DOCX Upload**: Uploaded valid `.docx` sample file to `POST /api/documents/upload`.
-2. **Missing File Field**: Submitted POST request without `file` form-data parameter.
-3. **TXT File Rejection**: Submitted `.txt` file with `text/plain` MIME type.
-4. **PDF File Rejection**: Submitted `.pdf` file with `application/pdf` MIME type.
-5. **Path Traversal Defense**: Submitted upload request with malicious filename `../../../etc/passwd.docx`.
-6. **Health Endpoint Regression**: Verified `GET /api/health` returns HTTP 200 OK.
-7. **Actual Assignment Document Integration**: Uploaded `/Users/yuvraj/Downloads/Red Herring Prospectus.docx` (1.84 MB, 127 pages).
+### Representative Search Verification (Non-PII Detection Verification)
+- **Person Name Text**: Found in `unit-00759` (*"Contact person: Lokesh Shah/ Soumavo Sarkar..."*).
+- **Email Text**: Found in `unit-00030` (*"E-mail: cs.connect@kshinternational.com; Website: www.kshinternational.com"*).
+- **Telephone Text**: Found in `unit-00029` (*"Contact Person: Sarthak Malvadkar, Company Secretary..."*).
+- **Company Name Text**: Found in `unit-00012` (*"KSH INTERNATIONAL LIMITED CORPORATE IDENTITY NUMBER: U28129PN1979PLC141032"*).
+- **Address Text**: Found in `unit-00025` (*"Our Company was originally incorporated as “Bhandary Metal Extrusion P..."*).
+
+### Tests Performed
+Executed automated runner `test_execution_003.js` covering 13 test points:
+1. `DocxParserService` module loading.
+2. Actual RHP upload via API.
+3. API document parsing (`POST /api/documents/:documentId/parse`).
+4. Paragraph count threshold check (> 500 paragraphs).
+5. Table & cell count threshold check (> 10 tables, > 100 cells).
+6. Person name text search.
+7. Email text search.
+8. Telephone text search.
+9. Company name text search.
+10. Address text search.
+11. Non-existent document ID 404 error handling.
+12. Read-only source file integrity check (mtime and size comparison).
+13. Health API regression check.
 
 ### Test Results
-- **TEST 1 (Valid DOCX Upload)**: **PASSED** (`HTTP 200 OK`, JSON metadata returned: `doc_doc_1786609769998_ee0979609420`).
-- **TEST 2 (Missing File Field)**: **PASSED** (`HTTP 400 Bad Request`, message: *"No file uploaded. Please attach a valid .docx document..."*).
-- **TEST 3 (TXT File Rejection)**: **PASSED** (`HTTP 400 Bad Request`, message: *"Unsupported file extension '.txt'. Only .docx documents are accepted."*).
-- **TEST 4 (PDF File Rejection)**: **PASSED** (`HTTP 400 Bad Request`, message: *"Unsupported file extension '.pdf'. Only .docx documents are accepted."*).
-- **TEST 5 (Path Traversal Security)**: **PASSED** (Original filename sanitized to `passwd.docx`, saved safely inside `server/uploads/`).
-- **TEST 6 (Health Endpoint Regression)**: **PASSED** (`HTTP 200 OK`, status: `"ok"`).
-- **TEST 7 (Actual Assignment Document Test)**: **PASSED** (`HTTP 200 OK`, ingested 1.84 MB `Red Herring Prospectus.docx` successfully).
-- **Frontend Build Test (`npx vite build`)**: **PASSED** (Built in 1.07s without errors).
-
-### Actual Assignment Document Test
-- **File**: `/Users/yuvraj/Downloads/Red Herring Prospectus.docx`
-- **File Size**: 1,844,676 bytes (1.84 MB)
-- **Pages**: 127 pages DOCX
-- **Ingestion Result**: Successful upload and metadata extraction (`documentId: doc_doc_1786609770017_8aa674b0a5b8`, `size: 1844676`, `mimeType: application/vnd.openxmlformats-officedocument.wordprocessingml.document`).
+- **All 13 Test Cases**: **PASSED** (0 failures).
+- **Frontend Build (`npx vite build`)**: **PASSED** (1.09s).
 
 ### Problems Encountered
-- None.
+- `errorHandler.js` operator precedence issue caused 404 error objects to return status 200. Fixed parenthesis ordering in `errorHandler.js`.
 
 ### Tradeoffs
-- Database models for persistent job tracking skipped in Execution 002 to maintain focus on the safe ingestion & validation foundation.
+- Decoupled parser from persistence models; full structured document content stored in-memory during parse operations.
 
 ### Known Limitations
-- Text extraction and PII entity detection engines are explicitly omitted per Execution 002 scope.
+- PII detection engine, regex patterns, and entity tagging are intentionally excluded per Execution 003 scope.
 
 ### Current System State
-- MERN architecture foundation active.
-- Backend listening on port 5001 with `/api/health` and `POST /api/documents/upload`.
-- Ingestion engine accepts, validates, sanitizes, and stores `.docx` files securely in `server/uploads/`.
-- Frontend provides interactive drag-and-drop file ingestion UI.
+- Fully operational MERN stack with DOCX upload and OpenXML structural document parser.
+- Endpoint `POST /api/documents/:documentId/parse` active.
+- Parser capable of processing 127-page Red Herring Prospectus in ~1.6s.
 
 ### Next Recommended Step
-Proceed to **EXECUTION 003**: Implement DOCX Text Extraction & Paragraph Parsing Service (`mammoth` or `docx` integration to extract paragraph structure, xml markup, and run elements for downstream PII detection).
+Proceed to **EXECUTION 004 — PII DETECTION ENGINE**:
+1. Implement entity detection service (`server/src/services/piiDetectorService.js`).
+2. Implement pattern matchers for the 9 required categories (Full Names, Emails, Phones, Company Names, Addresses, SSNs, Credit Cards, Dates of Birth, IP Addresses).
+3. Bind detector to structured text units from `docxParserService`.

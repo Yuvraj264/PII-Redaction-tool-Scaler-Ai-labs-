@@ -3,7 +3,7 @@
  * Catches unhandled application errors and returns a consistent JSON payload.
  */
 const errorHandler = (err, req, res, next) => {
-  const statusCode = err.statusCode || res.statusCode !== 200 ? res.statusCode : 500;
+  const statusCode = err.statusCode || (res.statusCode !== 200 ? res.statusCode : 500);
   
   console.error(`[Error Middleware] ${err.stack || err.message}`);
 

@@ -1,9 +1,11 @@
 const path = require('path');
 const fs = require('fs');
+const docxParserService = require('./docxParserService');
+const { UPLOAD_DIR } = require('../config/uploadConfig');
 
 /**
  * Document Service
- * Business logic for file ingestion metadata processing and safe storage management.
+ * Business logic for file ingestion metadata processing, storage lookup, and structured parsing.
  */
 class DocumentService {
   /**
@@ -18,7 +20,8 @@ class DocumentService {
       throw new Error('No document file provided for ingestion.');
     }
 
-    const documentId = `doc_${path.basename(file.filename, path.extname(file.filename))}`;
+    const rawBaseName = path.basename(file.filename, path.extname(file.filename));
+    const documentId = rawBaseName.startsWith('doc_') ? rawBaseName : `doc_${rawBaseName}`;
     const sanitizedOriginalName = path.basename(file.originalname);
     const extension = path.extname(file.originalname).toLowerCase() || '.docx';
 
@@ -30,6 +33,56 @@ class DocumentService {
       extension: extension,
       uploadedAt: new Date().toISOString()
     };
+  }
+
+  /**
+   * Locates an ingested file in the uploads directory by document ID safely.
+   * @param {string} documentId 
+   * @returns {string|null} Absolute file path or null if not found
+   */
+  findStoredFilePath(documentId) {
+    if (!documentId || typeof documentId !== 'string') return null;
+
+    // Sanitize documentId against path traversal
+    const safeDocId = path.basename(documentId);
+    
+    if (!fs.existsSync(UPLOAD_DIR)) return null;
+
+    const files = fs.readdirSync(UPLOAD_DIR);
+    
+    // Match file whose name starts with safeDocId or matches safeDocId directly
+    const targetFile = files.find(f => {
+      const base = path.basename(f, path.extname(f));
+      return base === safeDocId || f === safeDocId;
+    });
+
+    if (!targetFile) return null;
+
+    return path.join(UPLOAD_DIR, targetFile);
+  }
+
+  /**
+   * Parses stored document by document ID into structured document representation
+   * @param {string} documentId 
+   * @returns {Object} Structured document model
+   */
+  async parseDocument(documentId) {
+    const filePath = this.findStoredFilePath(documentId);
+
+    if (!filePath) {
+      const error = new Error(`Document with ID '${documentId}' not found in upload storage.`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const stats = fs.statSync(filePath);
+    const sourceMeta = {
+      originalName: `${documentId}.docx`,
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      size: stats.size
+    };
+
+    return await docxParserService.parseDocument(filePath, documentId, sourceMeta);
   }
 
   /**
