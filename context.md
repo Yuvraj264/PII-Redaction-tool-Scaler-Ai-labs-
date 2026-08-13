@@ -72,104 +72,77 @@ Implement a dedicated **Post-Redaction PII Leakage Scanner Subsystem** in pure J
 ### Objective
 Implement the dedicated **Gold-Standard Annotation Dataset & Formal Evaluation Matching Engine** in pure JavaScript. Establish machine-readable dataset schemas, ground-truth validators, annotation policies across all 9 PII categories, span-level evaluation matching rules (Exact Span, Partial, Wrong Type, FP, FN), metrics calculator, synthetic test fixture, prospectus development gold dataset, and REST API endpoint `POST /api/documents/:documentId/evaluate`.
 
-### Why Gold Data Is Required
-Accuracy, precision, and recall are only mathematically sound when evaluated against human-verified gold ground-truth datasets. Predictions are candidate suggestions and cannot serve as gold truth.
+---
 
-### Evaluation Unit & Matching Rules
-- **Evaluation Unit**: Span-level entity evaluation (`unitId`, `start`, `end`, `type`).
+## Execution 012
+
+### Objective
+Implement the dedicated **Formal PII Evaluation Engine** in pure JavaScript. Build input contract validator, evaluation configuration, deterministic span matching engine, duplicate prediction detector, character span mask projection evaluator, metrics calculator for entity and character metrics, per-type metrics across all 9 categories, micro/macro averages, $10 \times 10$ type confusion matrix, detailed error breakdown, evaluator service, and REST API endpoint `POST /api/evaluation/run`.
+
+### Input Contract Validation
+`evaluationInputContract.js` validates payload `{ goldAnnotations, predictions, evaluationConfig }` independently of database, HTTP, or UI.
+
+### Matching Rules & Error Classification
 - **Exact Span Match (`TP`)**: Span, type, and source unit match gold annotation exactly.
-- **Wrong Type (`WRONG_TYPE`)**: Span matches, but entity type differs (counted as FP for predicted type, FN for gold type).
-- **Partial Overlap (`PARTIAL`)**: Overlapping span (`gold.start < pred.end && pred.start < gold.end`) but not exact match (tracked separately, NOT TP).
-- **False Positive (`FP`)**: Prediction with no matching gold entity.
-- **False Negative (`FN`)**: Gold annotation with no matching prediction.
-
-### Annotation Policies by Category
-- **PERSON**: Full person name (e.g. "Sarthak Malvadkar"). Excludes honorifics ("Mr."), job titles ("CEO"), and committee names ("Audit Committee").
-- **EMAIL**: Complete email address including domain (e.g. "cs.connect@kshinternational.com").
-- **PHONE**: Complete phone string including country code (e.g. "+91 20 4505 3237").
-- **ORGANIZATION**: Complete company/legal entity name (e.g. "KSH International Limited"). Excludes statutory/regulatory bodies (SEBI, RBI, Stock Exchanges, ROC) per policy.
-- **ADDRESS**: Smallest complete physical address span excluding context labels ("Registered Office:").
-- **DOB**: Actual birth date value in birth context (e.g. "12/05/1979"). Excludes date labels ("Date of Birth:").
-- **SSN**: Complete 9-digit SSN (e.g. "900-01-0001").
-- **CREDIT_CARD**: Complete card number (e.g. "4111-1111-1111-1111").
-- **IP_ADDRESS**: Complete IPv4 address (e.g. "192.0.2.1").
+- **Wrong Type (`WRONG_TYPE`)**: Span matches, but entity type differs (counted as FP for predicted type, FN for gold type). Recorded in `errorBreakdown.wrongType.pairs`.
+- **Partial Overlap (`PARTIAL_MATCH`)**: Overlapping span (`gold.start < pred.end && pred.start < gold.end`) but not exact match (tracked separately in `errorBreakdown.partialMatches`, contributes FP to predicted type and FN to gold type under strict entity evaluation).
+- **Duplicate Prediction (`DUPLICATE_PREDICTION`)**: Multiple identical predictions emitted by detector. Increments `duplicatePredictionCount` and contributes FP under strict entity evaluation.
+- **False Positive (`FP`)**: Unmatched prediction.
+- **False Negative (`FN`)**: Unmatched gold annotation.
 
 ### Metric Formulations
-- **Precision**: $\text{TP} / (\text{TP} + \text{FP})$
-- **Recall**: $\text{TP} / (\text{TP} + \text{FN})$
-- **F1-Score**: $2 \times \text{Precision} \times \text{Recall} / (\text{Precision} + \text{Recall})$
+- **Entity Precision**: $\text{TP} / (\text{TP} + \text{FP})$
+- **Entity Recall**: $\text{TP} / (\text{TP} + \text{FN})$
+- **Entity F1-Score**: $2 \times \text{Precision} \times \text{Recall} / (\text{Precision} + \text{Recall})$
 - **Entity-Level Accuracy**: $\text{TP} / (\text{TP} + \text{FP} + \text{FN})$
-- **Token/Character-Level Accuracy**: $(\text{TP}_{\text{tokens}} + \text{TN}_{\text{tokens}}) / (\text{TP}_{\text{tokens}} + \text{TN}_{\text{tokens}} + \text{FP}_{\text{tokens}} + \text{FN}_{\text{tokens}})$
+- **Character-Level Accuracy**: $(\text{TP}_{\text{char}} + \text{TN}_{\text{char}}) / (\text{TP}_{\text{char}} + \text{TN}_{\text{char}} + \text{FP}_{\text{char}} + \text{FN}_{\text{char}})$
 - **Micro Metrics**: Aggregate TP, FP, FN across all entity types.
-- **Macro Metrics**: Average per-type metrics over applicable classes with gold/predictions present.
-- **Confusion Matrix**: 2D map tracking predictions vs gold annotations across types.
-
-### Ground-Truth Dataset Validation
-`goldDatasetValidator.js` validates:
-1. Schema contract structure (`evaluationDatasetSchema.js`).
-2. Annotation ID existence & uniqueness.
-3. Supported PII entity type.
-4. Source unit existence in document.
-5. Offset bounds (`start >= 0`, `end > start`, `end <= unitText.length`).
-6. Substring text invariant (`unitText.substring(start, end) === annotation.text`).
-7. Non-overlapping gold annotations within units.
-8. SHA-256 document hash check (`8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929` for Red Herring Prospectus.docx).
-
-### Synthetic Fixture Evaluation Results
-Executed evaluation run against `synthetic_gold_dataset.json` (9 annotations across all 9 PII categories):
-- **True Positives**: 9
-- **False Positives**: 0
-- **False Negatives**: 0
-- **Micro Precision**: 1.0000 (100%)
-- **Micro Recall**: 1.0000 (100%)
-- **Micro F1**: 1.0000 (100%)
-- **Entity-Level Accuracy**: 1.0000 (100%)
-- **Status**: **PASS**
-
-### Prospectus Gold Dataset Status
-Created `prospectus_gold_dataset.json` for `Red Herring Prospectus.docx`:
-- **Status**: `DEVELOPMENT / PARTIAL GOLD DATASET`
-- **Document Hash**: `8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929`
-- **Total Text Units in Source**: 4,535 units
-- **Verified Annotations**: 8 sample verified annotations across PERSON, EMAIL, ORGANIZATION, and PHONE.
-- **Coverage**: Pages 1-15 verified. (Full document annotations ongoing for future benchmark runs).
+- **Macro Metrics**: Average per-type metrics over applicable classes with gold annotations/predictions present (excluding `N/A` classes from denominator).
+- **$10 \times 10$ Type Confusion Matrix**: Matrix tracking predictions vs gold annotations across all 9 PII types plus `'NONE'`.
 
 ### Automated Evaluation Test Runner Results
-Executed `node server/tests/test_execution_011.js`:
-- **Total Test Suites**: 10 Test Suites
-- **Status**: **10 PASSED, 0 FAILED**
+Executed `node server/tests/test_execution_012.js`:
+- **Total Test Suites**: 11 Test Suites
+- **Status**: **11 PASSED, 0 FAILED**
 - **Test Breakdown**:
-  1. Exact TP Match: PASSED
-  2. False Negative: PASSED
-  3. False Positive: PASSED
-  4. Wrong Type Match: PASSED
-  5. Partial Span Overlap: PASSED
-  6. Safe Zero Division Handling: PASSED
-  7. Multiple Entity Types Micro/Macro Averages: PASSED
-  8. Gold Dataset Invariant Validation: PASSED
-  9. Invalid Text Offset Detection: PASSED
-  10. Synthetic Evaluation Fixture Run: PASSED
-- **Frontend Compilation (`npx vite build`)**: **PASSED** (629ms).
+  1. Synthetic Exact Match (P=1, R=1, F1=1, Char Accuracy=1): PASSED
+  2. Synthetic FP Test (TP=1, FP=1, FN=0 -> P=0.5, R=1.0, F1=0.6667): PASSED
+  3. Synthetic FN Test (TP=1, FP=0, FN=1 -> P=1.0, R=0.5, F1=0.6667): PASSED
+  4. Synthetic Wrong Type Test (Gold PERSON, Pred ORG -> FP for ORG, FN for PERSON): PASSED
+  5. Synthetic Partial Span Overlap Test (Gold "John Doe", Pred "John" -> Partial=1, FP=1, FN=1): PASSED
+  6. Synthetic Duplicate Predictions Test (Duplicate pred -> duplicateCount=1, FP=1): PASSED
+  7. Synthetic No-Gold Test (Gold empty, Pred PERSON -> FP=1, P=0, R="N/A"): PASSED
+  8. Synthetic No-Prediction Test (Gold PERSON, Pred empty -> FN=1, P="N/A", R=0): PASSED
+  9. Character Accuracy Projection Test (Exact vs Extra PII characters): PASSED
+  10. Per-Type Independent Metrics Test across all 9 PII categories: PASSED
+  11. HTTP API Endpoint Test (`POST /api/evaluation/run`): PASSED
+- **Frontend Compilation (`npx vite build`)**: **PASSED** (634ms).
 
-### Files Created in Execution 011
-- `server/src/evaluation/policy/annotationPolicy.js`
-- `server/src/evaluation/schemas/evaluationDatasetSchema.js`
-- `server/src/evaluation/validators/goldDatasetValidator.js`
-- `server/src/evaluation/engine/metricsCalculator.js`
-- `server/src/evaluation/engine/evaluationEngine.js`
-- `server/src/evaluation/loaders/evaluationDatasetLoader.js`
-- `server/src/evaluation/data/synthetic_gold_dataset.json`
-- `server/src/evaluation/data/prospectus_gold_dataset.json`
-- `server/tests/test_execution_011.js`
+### Files Created in Execution 012
+- `server/src/evaluation/config/evaluationConfig.js`
+- `server/src/evaluation/contracts/evaluationInputContract.js`
+- `server/src/evaluation/services/evaluatorService.js`
+- `server/src/evaluation/controllers/evaluationController.js`
+- `server/src/evaluation/routes/evaluationRoutes.js`
+- `server/tests/test_execution_012.js`
 
-### Files Modified in Execution 011
-- `server/src/controllers/documentController.js` (Added `evaluateDocument` method)
-- `server/src/routes/documentRoutes.js` (Registered `POST /api/documents/:documentId/evaluate`)
-- `flow.md` (Documented FLOW-011 A-J)
-- `context.md` (Appended Execution 011)
+### Files Modified in Execution 012
+- `server/src/evaluation/engine/evaluationEngine.js` (Added contract validation, duplicate prediction tracking, character mask projections, $10 \times 10$ confusion matrix)
+- `server/src/evaluation/engine/metricsCalculator.js` (Added character accuracy metrics, micro/macro averages, error breakdown, numeric formatting)
+- `server/src/app.js` (Mounted `/api/evaluation` route)
+- `flow.md` (Documented FLOW-012 A-M)
+- `context.md` (Appended Execution 012)
+
+### Files Preserved
+- All 9 detectors (`emailDetector.js`, `phoneDetector.js`, `ipDetector.js`, `ssnDetector.js`, `creditCardDetector.js`, `personDetector.js`, `organizationDetector.js`, `addressDetector.js`, `dobDetector.js`)
+- Redaction service (`docxRedactionService.js`)
+- Leakage scanner subsystem (`leakageScanner.js`, `leakageAnalyzer.js`, `leakageReport.js`)
+- Ingestion & parsing modules (`documentService.js`, `docxParserService.js`)
+- Express app & routes (`app.js`, `healthRoutes.js`, `documentRoutes.js`)
+- React frontend components (`App.jsx`, `DocumentUploadPlaceholder.jsx`)
 
 ### Known Limitations
-- The prospectus gold dataset is marked `DEVELOPMENT / PARTIAL GOLD DATASET` as complete manual annotation of all 127 pages is in progress.
+- Evaluator evaluates gold annotations against model predictions; complete prospectus gold annotation dataset remains marked `PARTIAL` pending complete 127-page annotation.
 
 ### Current System State
-- Complete pipeline operational: Ingestion -> Parsing -> 9-Category PII Detection -> Validation -> Normalization -> Replacement Plan Mapping -> OpenXML DOCX Redaction -> Post-Redaction Leakage Scan -> Gold Dataset Evaluation (`POST /api/documents/:documentId/evaluate`).
+- Complete pipeline operational: Ingestion -> Parsing -> 9-Category PII Detection -> Validation -> Normalization -> Replacement Plan Mapping -> OpenXML DOCX Redaction -> Post-Redaction Leakage Scan -> Formal PII Evaluation Engine (`POST /api/evaluation/run`).
