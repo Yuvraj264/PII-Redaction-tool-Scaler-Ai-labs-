@@ -5,7 +5,8 @@ const {
   detectPii, 
   generateReplacementPlan,
   redactDocument,
-  verifyRedaction
+  verifyRedaction,
+  evaluateDocument
 } = require('../controllers/documentController');
 const { handleUpload } = require('../middleware/uploadMiddleware');
 
@@ -52,5 +53,12 @@ router.post('/:documentId/redact', redactDocument);
  * @access  Public
  */
 router.post('/:documentId/verify-redaction', verifyRedaction);
+
+/**
+ * @route   POST /api/documents/:documentId/evaluate
+ * @desc    Evaluate PII detection against a ground-truth dataset
+ * @access  Public
+ */
+router.post('/:documentId/evaluate', evaluateDocument);
 
 module.exports = router;

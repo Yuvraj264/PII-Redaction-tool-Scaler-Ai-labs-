@@ -12,31 +12,26 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **DOCX Ingestion Engine & Validation** (`POST /api/documents/upload`)
 - **OpenXML DOCX Structural Parser & Source Mapping** (`POST /api/documents/:documentId/parse`)
 - **Full PII Detection Engine (9 Entity Categories)** (`POST /api/documents/:documentId/detect`)
-- **5 Core Deterministic PII Detectors**:
-  - `emailDetector.js` (**EMAIL**)
-  - `phoneDetector.js` (**PHONE**)
-  - `ipDetector.js` (**IP_ADDRESS**)
-  - `ssnDetector.js` (**SSN**)
-  - `creditCardDetector.js` (**CREDIT_CARD** with Luhn validation)
-- **4 Contextual / NLP PII Detectors**:
-  - `personDetector.js` (**PERSON** via local NLP + title context + false positive filters)
-  - `organizationDetector.js` (**ORGANIZATION** via corporate suffixes + allowlist filtering)
-  - `addressDetector.js` (**ADDRESS** via multi-component location rules & PIN matching)
-  - `dobDetector.js` (**DOB** via explicit DOB context keyword matching & date parsers)
+- **5 Core Deterministic PII Detectors**: `emailDetector.js`, `phoneDetector.js`, `ipDetector.js`, `ssnDetector.js`, `creditCardDetector.js`
+- **4 Contextual / NLP PII Detectors**: `personDetector.js`, `organizationDetector.js`, `addressDetector.js`, `dobDetector.js`
 - **Centralized Allowlist Service** (`server/src/services/allowlistService.js`)
 - **PII Normalization Service** (`server/src/services/piiNormalizationService.js`)
 - **PII Validation & Offset Invariant Checker** (`server/src/services/piiValidationService.js`)
 - **PII Audit & Diagnostics Generator** (`server/src/services/piiAuditService.js`)
 - **PII Detection Service & Overlap Resolver** (`server/src/services/piiDetectionService.js`)
-- **Synthetic Replacement Mapping Subsystem**:
-  - `replacementRegistry.js` (Bidirectional canonicalKey ↔ replacement mapping with collision prevention)
-  - `replacementService.js` (Replacement Plan builder & API service)
-  - **9 Type-Specific Synthetic Generators**: `personGenerator.js`, `emailGenerator.js`, `phoneGenerator.js`, `organizationGenerator.js`, `addressGenerator.js`, `dobGenerator.js`, `ssnGenerator.js`, `creditCardGenerator.js`, `ipGenerator.js`
+- **Synthetic Replacement Mapping Subsystem**: `replacementRegistry.js`, `replacementService.js`, 9 Type-Specific Synthetic Generators
 - **OpenXML DOCX Redaction Engine** (`server/src/services/docxRedactionService.js` - `POST /api/documents/:documentId/redact`)
-- **Post-Redaction PII Leakage Scanner Subsystem**:
-  - `leakageScanner.js` (Reparse & 9-category rescan orchestrator)
-  - `leakageAnalyzer.js` (Residual entity classifier for Categories A-D)
-  - `leakageReport.js` (Leakage report assembler - `POST /api/documents/:documentId/verify-redaction`)
+- **Post-Redaction PII Leakage Scanner Subsystem**: `leakageScanner.js`, `leakageAnalyzer.js`, `leakageReport.js` (`POST /api/documents/:documentId/verify-redaction`)
+- **Gold-Standard Annotation & Formal Evaluation Engine Subsystem**:
+  - `annotationPolicy.js` (Annotation guidelines across all 9 PII categories)
+  - `evaluationDatasetSchema.js` (JSON Schema contract validator for gold datasets)
+  - `goldDatasetValidator.js` (Ground-truth offset invariant, SHA-256 hash, & overlap validator)
+  - `evaluationEngine.js` (Span-level evaluation matching engine & TP/FP/FN/Partial/WrongType classifier)
+  - `metricsCalculator.js` (Precision, Recall, F1, Accuracy, Micro/Macro averages & Confusion Matrix)
+  - `evaluationDatasetLoader.js` (Dataset loader & file hash verifier)
+  - `synthetic_gold_dataset.json` (Controlled multi-category synthetic evaluation test fixture)
+  - `prospectus_gold_dataset.json` (Development gold dataset for Red Herring Prospectus.docx)
+  - Dev API Endpoint: `POST /api/documents/:documentId/evaluate`
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
 - **Document Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
 - **Temporary Upload Storage** (`server/uploads/` [Git-ignored])
@@ -45,12 +40,11 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **React Application Shell** (`client/src/App.jsx`)
 - **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
-- **Automated PII Detector, Audit, Replacement & Leakage Test Suite** (`server/tests/test_execution_010.js`)
+- **Automated Evaluator Test Suite** (`server/tests/test_execution_011.js`)
 
 ### [PLANNED — NOT IMPLEMENTED]
-- **Formal Precision/Recall Benchmark Evaluation Engine** (Gold-standard benchmark evaluation planned for future execution)
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
-- **Interactive PII Review UI** (Document preview & entity toggle UI planned for future execution)
+- **Interactive PII Review & Evaluation Dashboard UI** (Document preview, entity toggle & evaluation dashboard UI planned for future execution)
 
 ---
 
@@ -117,82 +111,92 @@ Performs independent post-redaction safety verification by reparsing generated r
 
 ---
 
-### FLOW-010-A — Redacted DOCX Reparse
-- **Entry Point**: `docxParserService.parseDocument(redactedFilePath, documentId)`
-- **Input**: Absolute path to generated redacted `.docx` archive (`server/uploads/:documentId_redacted.docx`).
-- **Processing**: Unzips archive, parses `word/document.xml`, `word/header*.xml`, `word/footer*.xml`, and extracts structured text units into memory.
-- **Validation**: Verifies file openability and XML well-formedness.
-- **Output**: Reparsed Structured Document Model.
-- **Failure Path**: Returns report status `FAIL` if unzipping or XML parsing fails.
+## FLOW-011 — Gold Dataset and Evaluation Foundation
+
+### Overview
+Establishes the mathematical and data foundation for evaluating PII detection quality without altering production redaction behavior or calculating metrics against synthetic/unverified model outputs. Defines annotation policies across all 9 PII categories, schema contracts, ground-truth validator, span-level evaluation matching engine, metrics calculator, dataset loaders, synthetic fixtures, prospectus development gold dataset, and REST API evaluation endpoint (`POST /api/documents/:documentId/evaluate`).
+
+---
+
+### FLOW-011-A — Annotation Policy
+- **Entry Point**: `server/src/evaluation/policy/annotationPolicy.js`
+- **Input**: PII entity candidates across all 9 categories.
+- **Processing**: Enforces category-specific annotation guidelines (e.g. full person names excluding titles/roles, complete email/phone strings, complete company names excluding regulatory bodies, smallest complete physical address spans excluding labels, actual DOB date values).
 - **Status**: **[IMPLEMENTED]**
 
 ---
 
-### FLOW-010-B — Full PII Rescan
-- **Entry Point**: `piiDetectionService.detectPiiInUnits(redactedDoc.content, documentId)`
-- **Input**: Reparsed text units array.
-- **Processing**: Runs all 9 detectors (**EMAIL**, **PHONE**, **IP_ADDRESS**, **SSN**, **CREDIT_CARD**, **PERSON**, **ORGANIZATION**, **ADDRESS**, **DOB**) against every reparsed text unit.
-- **Output**: Raw rescan candidate entities array.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-010-C — Original Entity Comparison
-- **Entry Point**: `leakageAnalyzer.classifyFinding()` original entity matching.
-- **Input**: Candidate entity text and `originalPiiNormalizedSet`.
-- **Processing**: Verifies whether candidate entity text or normalized comparison key matches an unredacted original PII value.
-- **Output**: Boolean match flag.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-010-D — Synthetic Replacement Classification
-- **Entry Point**: `leakageAnalyzer.classifyFinding()` synthetic replacement matching.
-- **Input**: Candidate entity text and `syntheticReplacementsSet`.
-- **Processing**: Identifies if a detected candidate entity (e.g. "Arjun Mehta" detected as `PERSON` or "arjun.mehta@example.com" detected as `EMAIL`) is an expected synthetic replacement generated by the replacement engine.
-- **Output**: Classifies finding as `EXPECTED_SYNTHETIC_ENTITY` with `expectedSynthetic: true` and `severity: LOW` without failing the audit.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-010-E — Residual PII Classification
-- **Entry Point**: `leakageAnalyzer.classifyFinding()`
-- **Input**: Rescan candidate entity.
-- **Processing**: Classifies finding into one of 4 categories:
-  - **CATEGORY A — EXPECTED_SYNTHETIC_ENTITY**: Synthetic replacement detected (`severity: LOW`).
-  - **CATEGORY B — CONFIRMED_LEAK**: Original PII value (raw or normalized) detected in redacted output (`severity: CRITICAL`).
-  - **CATEGORY C — NEW_UNINTENDED_PII**: Unintended sensitive value produced during replacement (`severity: HIGH`).
-  - **CATEGORY D — SCANNER_FALSE_POSITIVE**: False positive on non-PII term (`severity: LOW`).
-- **Output**: Category tag & severity.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-010-F — Leakage Severity & Status Determination
-- **Entry Point**: `leakageReportBuilder.buildReport()`
-- **Input**: Classified findings array and structural validation results.
-- **Processing**: Computes final report status:
-  - `status: "PASS"`: If `confirmedLeaksCount === 0` AND `reparsedSuccessfully === true`.
-  - `status: "FAIL"`: If `confirmedLeaksCount > 0` OR `reparsedSuccessfully === false`.
-- **Output**: Final status string (`PASS` or `FAIL`).
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-010-G — Structural Validation
-- **Entry Point**: `leakageScanner.scanRedactedDocument()` structural comparison step.
-- **Input**: Original vs Redacted structured document models.
-- **Processing**: Compares `originalParagraphs` vs `redactedParagraphs` and `originalTables` vs `redactedTables` to confirm document structural integrity.
-- **Output**: `structuralValidation` object.
-- **Status**: **[IMPLEMENTED]**
-
----
-
-### FLOW-010-H — Diagnostic Leakage Report Generation
-- **Entry Point**: `POST /api/documents/:documentId/verify-redaction`
+### FLOW-011-B — Candidate Suggestion
+- **Entry Point**: `piiDetectionService.detectPiiInDocument(documentId)`
 - **Input**: Document ID.
-- **Processing**: Executes `leakageScanner.scanRedactedDocument(documentId)` and returns structured JSON report.
-- **Output**: HTTP 200 OK JSON response containing safe summary metrics and leak lists.
+- **Processing**: Generates initial candidate predictions for human annotation review. Candidate predictions are explicitly marked as suggestions and do NOT automatically become gold labels.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-011-C — Human Verification
+- **Entry Point**: Annotation Review & Dataset Authoring.
+- **Input**: Candidate predictions and source document text units.
+- **Processing**: Human reviewer accepts, rejects, modifies span boundaries, or adds missing entity annotations to form ground truth.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-011-D — Gold Dataset Validation
+- **Entry Point**: `goldDatasetValidator.validateDataset(dataset, textUnits, sourceFilePath)`
+- **Input**: Gold dataset JSON object, structured text units, and optional source file path.
+- **Processing**: Validates dataset schema, ID uniqueness, offset bounds (`start >= 0`, `end > start`, `end <= unitText.length`), substring text invariant (`unitText.substring(start, end) === annotation.text`), gold overlap rules, and SHA-256 document hash integrity.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-011-E — Prediction / Gold Span Matching
+- **Entry Point**: `evaluationEngine.evaluate(predictions, goldAnnotations, textUnits)`
+- **Input**: Predictions array and validated gold annotations array.
+- **Processing**: Searches gold annotations in matching `unitId` for exact span match (`pred.start === gold.start && pred.end === gold.end`).
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-011-F — TP / FP / FN Classification
+- **Entry Point**: `evaluationEngine.evaluate()` classification step.
+- **Input**: Exact span matches and unmatched entities.
+- **Processing**:
+  - `TP`: Exact span and entity type match.
+  - `FP`: Prediction with no matching gold entity.
+  - `FN`: Gold entity with no matching prediction.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-011-G — Partial Match Handling
+- **Entry Point**: `evaluationEngine.evaluate()` partial overlap check.
+- **Input**: Prediction overlapping gold span (`pred.start < gold.end && gold.start < pred.end`).
+- **Processing**: Tracks partial match separately in report metrics (`summary.partialMatches`). Does NOT count partial match as True Positive.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-011-H — Wrong-Type Handling
+- **Entry Point**: `evaluationEngine.evaluate()` type comparison step.
+- **Input**: Exact span match with differing entity type (`pred.type !== gold.type`).
+- **Processing**: Classifies as `WRONG_TYPE`. Counts as FP for predicted type and FN for gold type in metric calculations.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-011-I — Metric Calculation Foundation
+- **Entry Point**: `metricsCalculator.calculateMetrics()`
+- **Input**: Aggregated evaluation counts.
+- **Processing**: Computes Precision ($\text{TP}/(\text{TP}+\text{FP})$), Recall ($\text{TP}/(\text{TP}+\text{FN})$), F1 ($2\text{PR}/(\text{P}+\text{R})$), Entity-Level Accuracy ($\text{TP}/(\text{TP}+\text{FP}+\text{FN})$), Token Accuracy, Per-Type Metrics, Micro/Macro averages (handling zero-division cleanly), and Type Confusion Matrix.
+- **Status**: **[IMPLEMENTED]**
+
+---
+
+### FLOW-011-J — Evaluation Reproducibility
+- **Entry Point**: `POST /api/documents/:documentId/evaluate`
+- **Input**: Document ID.
+- **Processing**: Loads document text units, verifies document SHA-256 hash, runs evaluation engine against dataset, and returns reproducible JSON payload containing dataset metadata, policy version, and full metrics.
 - **Status**: **[IMPLEMENTED]**
 
 ---
@@ -200,31 +204,35 @@ Performs independent post-redaction safety verification by reparsing generated r
 ### Comprehensive Data Flow Diagram
 
 ```
-Redacted DOCX Archive (docxRedactionService.js)
-  │
-  ▼
-Reparse Engine (docxParserService.js)
-  │
-  ▼
-Reparsed Text Units
-  │
-  ▼
-All 9 PII Detectors Rescan (piiDetectionService.js)
-  │
-  ▼
-Candidate Entities
-  │
-  ▼
-Residual Entity Classifier (leakageAnalyzer.js)
-  ├─► Matches Synthetic Replacement Set? ──► CATEGORY A: EXPECTED_SYNTHETIC_ENTITY (PASS)
-  ├─► Matches Original PII Set? ───────────► CATEGORY B: CONFIRMED_LEAK (FAIL - CRITICAL)
-  ├─► Unintended Deterministic PII? ────────► CATEGORY C: NEW_UNINTENDED_PII (HIGH)
-  └─► Allowlisted / Non-PII Term? ──────────► CATEGORY D: SCANNER_FALSE_POSITIVE (LOW)
-  │
-  ▼
-Structural Validation Engine (originalParagraphs vs redactedParagraphs, originalTables vs redactedTables)
-  │
-  ▼
-Diagnostic Leakage Report (POST /api/documents/:documentId/verify-redaction)
-  └── Returns status: PASS / FAIL + Safe Metadata Summary Metrics + Leaks List
+Source DOCX Archive
+     │
+     ▼
+Structured Document Parsing (docxParserService.js)
+     │
+     ├─────────────────────────────────────────┐
+     ▼                                         ▼
+Model Predictions                        Human Review & Gold Annotation
+ (piiDetectionService.js)                (annotationPolicy.js)
+     │                                         │
+     │                                         ▼
+     │                                   Gold Dataset Schema & Hash Validation
+     │                                   (goldDatasetValidator.js)
+     │                                         │
+     └───────────────────┬─────────────────────┘
+                         ▼
+             Span-Level Evaluation Matching Engine (evaluationEngine.js)
+                         │
+             ┌───────────┼───────────┐
+             ▼           ▼           ▼
+         Exact TP    Partial     Wrong Type / FP / FN
+             │
+             ▼
+   Metrics Calculator Service (metricsCalculator.js)
+     ├── Micro & Macro Precision / Recall / F1
+     ├── Entity-Level & Token-Level Accuracy
+     ├── Per-Type Metrics across 9 Categories
+     └── Type-Level Confusion Matrix
+             │
+             ▼
+   HTTP 200 OK Response (POST /api/documents/:documentId/evaluate)
 ```

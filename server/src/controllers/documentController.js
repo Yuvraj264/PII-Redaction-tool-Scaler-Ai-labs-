@@ -241,11 +241,60 @@ const verifyRedaction = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Evaluate PII detection against a ground-truth dataset
+ * @route   POST /api/documents/:documentId/evaluate
+ * @access  Public
+ */
+const evaluateDocument = async (req, res, next) => {
+  try {
+    const { documentId } = req.params;
+    const path = require('path');
+    const evaluationEngine = require('../evaluation/engine/evaluationEngine');
+    const evaluationDatasetLoader = require('../evaluation/loaders/evaluationDatasetLoader');
+    const docxParserService = require('../services/docxParserService');
+
+    const docMeta = documentService.getDocumentMetadata(documentId);
+    if (!docMeta) {
+      return res.status(404).json({
+        status: 'error',
+        statusCode: 404,
+        message: `Document '${documentId}' not found.`
+      });
+    }
+
+    // 1. Detect PII predictions
+    const detectionResult = await piiDetectionService.detectPiiInDocument(documentId);
+    const predictions = detectionResult.entities || [];
+
+    // 2. Parse document text units
+    const parsedDoc = await docxParserService.parseDocument(docMeta.filePath, documentId);
+
+    // 3. Load gold dataset
+    const datasetPath = path.join(__dirname, '../evaluation/data/prospectus_gold_dataset.json');
+    const { dataset, validation } = evaluationDatasetLoader.loadDataset(datasetPath, parsedDoc.content, docMeta.filePath);
+
+    // 4. Run evaluation engine
+    const evaluationReport = evaluationEngine.evaluate(predictions, dataset.annotations, parsedDoc.content);
+
+    return res.status(200).json({
+      success: true,
+      message: 'PII detection evaluation completed successfully',
+      datasetValidation: validation,
+      evaluationReport
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   uploadDocument,
   parseDocument,
   detectPii,
   generateReplacementPlan,
   redactDocument,
-  verifyRedaction
+  verifyRedaction,
+  evaluateDocument
 };
+
