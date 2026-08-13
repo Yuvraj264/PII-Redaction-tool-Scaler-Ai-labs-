@@ -6,7 +6,7 @@ const path = require('path');
 /**
  * DOCX Structural Parser Service
  * Reads OpenXML .docx archives in-memory and extracts structured paragraphs, tables,
- * and headers/footers with stable IDs, type tags, and precise location metadata.
+ * runs, and headers/footers with stable IDs, type tags, runs, and precise location metadata.
  */
 class DocxParserService {
   constructor() {
@@ -20,9 +20,68 @@ class DocxParserService {
   }
 
   /**
+   * Helper to extract individual formatting text runs (<w:r>) from an OpenXML paragraph node (<w:p>)
+   * @param {Object} pNode - OpenXML paragraph object
+   * @returns {Array<Object>} Array of run objects [{ index: 0, text: "..." }]
+   */
+  extractRunsFromParagraphNode(pNode) {
+    if (!pNode) return [];
+    const runs = [];
+    let runIndex = 0;
+
+    const traverseForRuns = (node) => {
+      if (!node || typeof node !== 'object') return;
+
+      if (node['w:r']) {
+        const rList = Array.isArray(node['w:r']) ? node['w:r'] : [node['w:r']];
+        rList.forEach(rNode => {
+          let runText = '';
+          if (rNode['w:t']) {
+            const tVal = rNode['w:t'];
+            if (Array.isArray(tVal)) {
+              runText = tVal.map(t => typeof t === 'string' ? t : (t['#text'] || '')).join('');
+            } else if (typeof tVal === 'string') {
+              runText = tVal;
+            } else if (typeof tVal === 'object' && tVal['#text']) {
+              runText = tVal['#text'];
+            }
+          }
+
+          if (runText.length > 0) {
+            runs.push({
+              index: runIndex++,
+              text: runText
+            });
+          }
+        });
+      }
+
+      // Check child properties recursively
+      Object.keys(node).forEach(key => {
+        if (key !== 'w:r' && typeof node[key] === 'object') {
+          if (Array.isArray(node[key])) {
+            node[key].forEach(child => traverseForRuns(child));
+          } else {
+            traverseForRuns(node[key]);
+          }
+        }
+      });
+    };
+
+    traverseForRuns(pNode);
+    return runs;
+  }
+
+  /**
    * Helper to extract concatenated text string from an OpenXML paragraph node (<w:p>)
    */
   extractTextFromParagraphNode(pNode) {
+    const runs = this.extractRunsFromParagraphNode(pNode);
+    if (runs.length > 0) {
+      return runs.map(r => r.text).join('');
+    }
+    
+    // Fallback direct extraction if runs format differs
     if (!pNode) return '';
     let textParts = [];
 
@@ -43,15 +102,8 @@ class DocxParserService {
         }
       }
 
-      if (node['w:r'] && Array.isArray(node['w:r'])) {
-        node['w:r'].forEach(r => traverse(r));
-      } else if (node['w:r']) {
-        traverse(node['w:r']);
-      }
-
-      // Check child properties recursively
       Object.keys(node).forEach(key => {
-        if (key !== 'w:r' && key !== 'w:t' && typeof node[key] === 'object') {
+        if (key !== 'w:t' && typeof node[key] === 'object') {
           if (Array.isArray(node[key])) {
             node[key].forEach(child => traverse(child));
           } else {
@@ -66,6 +118,19 @@ class DocxParserService {
   }
 
   /**
+   * Character offset verification utility
+   * Verifies standard convention: start (inclusive), end (exclusive)
+   * @param {Object} unit - Extracted text unit
+   * @param {number} start - 0-indexed inclusive start offset
+   * @param {number} end - 0-indexed exclusive end offset
+   * @returns {string} Target entity text substring
+   */
+  extractSubstring(unit, start, end) {
+    if (!unit || typeof unit.text !== 'string') return '';
+    return unit.text.substring(start, end);
+  }
+
+  /**
    * Main parsing method for a .docx file
    * @param {string} filePath - Absolute filesystem path to .docx file
    * @param {string} documentId - Safe document identifier
@@ -77,7 +142,6 @@ class DocxParserService {
       throw new Error(`Document file not found at path: ${filePath}`);
     }
 
-    // Verify source file is readable without mutating
     const stats = fs.statSync(filePath);
     if (stats.size === 0) {
       throw new Error('Document file is empty (0 bytes).');
@@ -111,11 +175,15 @@ class DocxParserService {
     let tableCounter = 0;
     let cellCounter = 0;
     let emptyUnitCounter = 0;
+    let totalRunCounter = 0;
 
     // Helper to register an extracted unit
-    const addUnit = (type, text, location) => {
+    const addUnit = (type, pNode, textOverride, location) => {
       const id = `unit-${String(unitCounter++).padStart(5, '0')}`;
-      const rawText = text || '';
+      const runs = pNode ? this.extractRunsFromParagraphNode(pNode) : [];
+      totalRunCounter += runs.length;
+
+      const rawText = textOverride !== undefined ? textOverride : (runs.length > 0 ? runs.map(r => r.text).join('') : this.extractTextFromParagraphNode(pNode));
       const normalizedText = rawText.replace(/\s+/g, ' ').trim();
 
       if (normalizedText.length === 0) {
@@ -127,18 +195,20 @@ class DocxParserService {
         type,
         text: rawText,
         normalizedText,
-        location
+        runs,
+        location: {
+          documentId,
+          ...location
+        }
       });
     };
 
     // Traverse body top-level elements (<w:p> and <w:tbl>)
-    // To preserve document order, we check bodyNode elements
     Object.keys(bodyNode).forEach(key => {
       if (key === 'w:p') {
         const pList = Array.isArray(bodyNode['w:p']) ? bodyNode['w:p'] : [bodyNode['w:p']];
         pList.forEach((pNode) => {
-          const pText = this.extractTextFromParagraphNode(pNode);
-          addUnit('paragraph', pText, {
+          addUnit('paragraph', pNode, undefined, {
             paragraphIndex: paragraphCounter++
           });
         });
@@ -156,7 +226,7 @@ class DocxParserService {
               const cellParagraphs = tcNode['w:p'] ? (Array.isArray(tcNode['w:p']) ? tcNode['w:p'] : [tcNode['w:p']]) : [];
               
               if (cellParagraphs.length === 0) {
-                addUnit('table-cell', '', {
+                addUnit('table-cell', null, '', {
                   tableIndex: tableIdx,
                   rowIndex: rowIdx,
                   cellIndex: cellIdx,
@@ -164,8 +234,7 @@ class DocxParserService {
                 });
               } else {
                 cellParagraphs.forEach((pNode, cellPIdx) => {
-                  const cellText = this.extractTextFromParagraphNode(pNode);
-                  addUnit('table-cell', cellText, {
+                  addUnit('table-cell', pNode, undefined, {
                     tableIndex: tableIdx,
                     rowIndex: rowIdx,
                     cellIndex: cellIdx,
@@ -179,7 +248,7 @@ class DocxParserService {
       }
     });
 
-    // Extract Headers and Footers if present in ZIP entries
+    // Extract Headers and Footers
     const headerEntries = zipEntries.filter(e => /^word\/header\d+\.xml$/i.test(e.entryName));
     const footerEntries = zipEntries.filter(e => /^word\/footer\d+\.xml$/i.test(e.entryName));
 
@@ -193,7 +262,7 @@ class DocxParserService {
           pList.forEach((pNode, pIdx) => {
             const hText = this.extractTextFromParagraphNode(pNode);
             if (hText && hText.trim().length > 0) {
-              addUnit('header', hText, {
+              addUnit('header', pNode, hText, {
                 headerId: `header-${hIdx + 1}`,
                 paragraphIndex: pIdx
               });
@@ -215,7 +284,7 @@ class DocxParserService {
           pList.forEach((pNode, pIdx) => {
             const fText = this.extractTextFromParagraphNode(pNode);
             if (fText && fText.trim().length > 0) {
-              addUnit('footer', fText, {
+              addUnit('footer', pNode, fText, {
                 footerId: `footer-${fIdx + 1}`,
                 paragraphIndex: pIdx
               });
@@ -242,9 +311,16 @@ class DocxParserService {
         tableCellCount: cellCounter,
         textUnitCount: contentUnits.length,
         totalCharacterCount: totalCharacterCount,
+        totalRunCount: totalRunCounter,
         emptyUnitCount: emptyUnitCounter,
         headerCount: headerEntries.length,
         footerCount: footerEntries.length
+      },
+      offsetConvention: {
+        type: "zero-indexed",
+        start: "inclusive",
+        end: "exclusive",
+        substringGuarantee: "unit.text.substring(start, end) === entityText"
       },
       content: contentUnits
     };

@@ -10,7 +10,8 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **Express Server Foundation** (`server/server.js`, `server/src/app.js`)
 - **Health Check Endpoint** (`GET /api/health`)
 - **DOCX Ingestion Engine & Validation** (`POST /api/documents/upload`)
-- **OpenXML DOCX Structural Parser** (`POST /api/documents/:documentId/parse`)
+- **OpenXML DOCX Structural Parser & Source Mapping** (`POST /api/documents/:documentId/parse`)
+- **OpenXML Run-Level Breakdown (`<w:r>`) & Offset Helpers** (`server/src/services/docxParserService.js`)
 - **Multer Upload Middleware** (`server/src/middleware/uploadMiddleware.js`)
 - **Document Metadata & Parsing Services** (`server/src/services/documentService.js`, `server/src/services/docxParserService.js`)
 - **Temporary Upload Storage** (`server/uploads/` [Git-ignored])
@@ -19,11 +20,12 @@ This document details the operational execution flows of the PII Redaction Tool 
 - **React Application Shell** (`client/src/App.jsx`)
 - **Interactive DOCX Drag & Drop Upload Component** (`client/src/components/DocumentUploadPlaceholder.jsx`)
 - **Vite Proxy & Dev Environment** (`client/vite.config.js`)
+- **Comprehensive 16-Point Parser Test Harness** (`scratch/test_execution_004.js`)
 
 ### [PLANNED]
-- **PII Detection Engine** (Regex + NLP / Entity recognition planned for Execution 004)
-- **Synthetic Replacement & Redaction Engine** (DOCX text manipulation planned for Execution 005)
-- **Evaluation & Validation Engine** (Precision/Recall metrics planned for Execution 006)
+- **PII Detection Engine** (Regex + NLP / Entity recognition planned for Execution 005)
+- **Synthetic Replacement & Redaction Engine** (DOCX text manipulation planned for Execution 006)
+- **Evaluation & Validation Engine** (Precision/Recall metrics planned for Execution 007)
 - **MongoDB Data Persistence** (Redaction job metadata & history models planned for future execution)
 - **Interactive PII Review UI** (Document preview & entity toggle UI planned for future execution)
 
@@ -86,33 +88,33 @@ Client submits a `.docx` document to the ingestion API. The server validates for
 ### Overview
 Parses an ingested DOCX document into a structured internal model containing paragraphs, table cells, headers, and footers with stable unit IDs (`unit-00001`) and location metadata.
 
+---
+
+## FLOW-004 — Extraction Verification and Source Mapping
+
+### Overview
+Validates structural text extraction, OpenXML run-level breakdown (`<w:r>`), character offset conventions (`start` inclusive, `end` exclusive), and deterministic location mapping across paragraphs, tables, headers, and footers for downstream PII targeting.
+
 ### Execution Details
 - **Entry Point**: `POST /api/documents/:documentId/parse`
-- **Previous Component**: Client App / Ingestion UI / API Consumer
-- **Current Component**: Document Controller (`server/src/controllers/documentController.js`) & Parser Service (`server/src/services/docxParserService.js`)
-- **Processing Steps**:
+- **Input**: Ingested DOCX file in `server/uploads/`
+- **Processing**:
   1. Client sends POST request to `/api/documents/:documentId/parse`.
-  2. `documentController.parseDocument` extracts `documentId` from URL route parameters.
-  3. `documentService.parseDocument(documentId)` locates the stored `.docx` file in `server/uploads/`.
-  4. `docxParserService.parseDocument(filePath, documentId)` reads OpenXML archive in-memory using `adm-zip`:
-     - Reads `word/document.xml`, `word/header*.xml`, `word/footer*.xml`.
-     - Parses XML using `fast-xml-parser`.
-     - Traverses `<w:p>` and `<w:tbl>` elements in exact document order.
-  5. Formats extracted units:
-     - `id`: Stable unit identifier (`unit-00001`, `unit-00002`, ...).
-     - `type`: `"paragraph"`, `"table-cell"`, `"header"`, `"footer"`.
-     - `text`: Raw extracted text string.
-     - `normalizedText`: Normalized whitespace search string.
-     - `location`: Exact index coordinates (`paragraphIndex`, `tableIndex`, `rowIndex`, `cellIndex`).
-  6. Computes summary metrics (`paragraphCount`, `tableCount`, `tableCellCount`, `textUnitCount`, `totalCharacterCount`, `emptyUnitCount`).
-  7. Returns HTTP 200 OK JSON response containing document metrics and safe debug preview (first 10 units with truncated text).
-- **Output**: JSON payload:
+  2. `documentService.parseDocument(documentId)` loads OpenXML file archive in-memory (`adm-zip`).
+  3. `docxParserService.parseDocument` extracts:
+     - **Paragraphs**: `<w:p>` nodes with paragraph indices (`paragraphIndex`).
+     - **Table Cells**: `<w:tbl>` -> `<w:tr>` -> `<w:tc>` grid coordinates (`tableIndex`, `rowIndex`, `cellIndex`, `paragraphIndex`).
+     - **Formatting Runs**: `<w:r>` formatting run text segments (`runs: [{ index: 0, text: "..." }]`).
+     - **Headers/Footers**: `word/header*.xml` and `word/footer*.xml` sections.
+  4. Applies standardized zero-indexed character offset convention (`start` inclusive, `end` exclusive), guaranteeing `unit.text.substring(start, end) === entityText`.
+  5. Enforces deterministic location independence for repeated text occurrences across different document units.
+- **Output**: JSON metadata response payload:
   ```json
   {
     "success": true,
     "message": "Document parsed successfully",
     "document": {
-      "documentId": "doc_1786610748640_d4bcdc4f93c0",
+      "documentId": "doc_1786621498263_aab04b0d296c",
       "sourceFile": { "originalName": "Red Herring Prospectus.docx", "size": 1844676 },
       "metrics": {
         "paragraphCount": 1006,
@@ -120,62 +122,70 @@ Parses an ingested DOCX document into a structured internal model containing par
         "tableCellCount": 3225,
         "textUnitCount": 4535,
         "totalCharacterCount": 321112,
-        "emptyUnitCount": 1023,
-        "headerCount": 75,
-        "footerCount": 74
+        "totalRunCount": 4980,
+        "emptyUnitCount": 1023
       },
-      "preview": [ ... first 10 text units ... ]
+      "offsetConvention": {
+        "type": "zero-indexed",
+        "start": "inclusive",
+        "end": "exclusive",
+        "substringGuarantee": "unit.text.substring(start, end) === entityText"
+      },
+      "preview": [ ... 10 sample text units with run counts and location objects ... ]
     }
   }
   ```
 - **Error Paths**:
-  - **Document Not Found**: Returns HTTP 404 `{ "status": "error", "statusCode": 404, "message": "Document with ID '...' not found in upload storage." }`.
-  - **Corrupt / Invalid Archive**: Returns HTTP 400 `{ "status": "error", "statusCode": 400, "message": "Failed to open DOCX archive: ..." }`.
+  - **Missing Document ID**: Returns HTTP 404 `{ "status": "error", "statusCode": 404, "message": "Document with ID '...' not found..." }`.
+  - **Corrupt File / Invalid OpenXML**: Returns HTTP 400 `{ "status": "error", "statusCode": 400, "message": "Failed to open DOCX archive..." }`.
 
-### FLOW-003-A — Paragraph Extraction
-- **Input**: `<w:p>` XML nodes inside `word/document.xml`.
-- **Processing**: Extracts text runs `<w:t>` inside paragraph node while preserving paragraph order.
-- **Output**: Unit with `type: "paragraph"`, `location: { paragraphIndex: P_INDEX }`.
-- **Status**: **[IMPLEMENTED]**
-
-### FLOW-003-B — Table Extraction
-- **Input**: `<w:tbl>` XML nodes inside `word/document.xml`.
-- **Processing**: Traverses table rows `<w:tr>` and table cells `<w:tc>`, extracting paragraph text runs.
-- **Output**: Unit with `type: "table-cell"`, `location: { tableIndex: T_INDEX, rowIndex: R_INDEX, cellIndex: C_INDEX, paragraphIndex: P_INDEX }`.
-- **Status**: **[IMPLEMENTED]**
-
-### FLOW-003-C — Header/Footer Extraction
-- **Input**: `word/header*.xml` and `word/footer*.xml` entries inside OpenXML archive.
-- **Processing**: Traverses header/footer paragraph nodes.
-- **Output**: Unit with `type: "header"` or `type: "footer"`, `location: { headerId / footerId, paragraphIndex }`.
-- **Status**: **[IMPLEMENTED]**
-
-### Data Flow Diagram
-
+### Source Mapping Model
+```javascript
+{
+  id: "unit-00030",
+  type: "table-cell",
+  text: "E-mail: cs.connect@kshinternational.com; Website: www.kshinternational.com",
+  normalizedText: "E-mail: cs.connect@kshinternational.com; Website: www.kshinternational.com",
+  runs: [
+    { index: 0, text: "E-mail: " },
+    { index: 1, text: "cs.connect@kshinternational.com" },
+    { index: 2, text: "; Website: www.kshinternational.com" }
+  ],
+  location: {
+    documentId: "doc_1786621498263_aab04b0d296c",
+    tableIndex: 0,
+    rowIndex: 2,
+    cellIndex: 3,
+    paragraphIndex: 0
+  }
+}
 ```
-Browser / API Consumer
+
+### Character Offset Convention
+- `start`: 0-indexed inclusive start position.
+- `end`: 0-indexed exclusive end position.
+- `unit.text.substring(start, end)` strictly evaluates to target entity string.
+
+### Testing Flow
+```
+Parser Service (server/src/services/docxParserService.js)
   │
-  │ POST /api/documents/:documentId/parse
   ▼
-Express Router (server/src/routes/documentRoutes.js)
-  │
-  ▼
-Document Controller (server/src/controllers/documentController.js)
-  │
-  ▼
-Document Service (server/src/services/documentService.js)
-  ├─► Locate stored file in server/uploads/
-  └─► Invoke docxParserService.parseDocument()
-        │
-        ▼
-DOCX Parser Service (server/src/services/docxParserService.js)
-  ├─► Open ZIP Archive in-memory (adm-zip)
-  ├─► Parse word/document.xml, header*.xml, footer*.xml (fast-xml-parser)
-  ├─► Extract Paragraphs (<w:p>)
-  ├─► Extract Table Cells (<w:tbl> -> <w:tr> -> <w:tc>)
-  ├─► Extract Headers & Footers
-  └─► Build Structured Document Model with Location Metadata
-        │
-        ▼
-HTTP 200 OK JSON Response (Metrics + Safe Preview)
+Automated 16-Point Test Harness (scratch/test_execution_004.js)
+  ├─► TEST-001: Load Valid DOCX
+  ├─► TEST-002: Paragraph Extraction (> 500)
+  ├─► TEST-003: Table Grid Extraction (> 10 tables, > 100 cells)
+  ├─► TEST-004: Stable Sequential IDs (unit-00001)
+  ├─► TEST-005: Deterministic Location Objects
+  ├─► TEST-006: Substring Offset Convention Assertion
+  ├─► TEST-007: Representative Person Text Search
+  ├─► TEST-008: Representative Email Text Search
+  ├─► TEST-009: Representative Phone Text Search
+  ├─► TEST-010: Representative Company Text Search
+  ├─► TEST-011: Representative Address Text Search
+  ├─► TEST-012: Multi-Occurrence Independent Location Check
+  ├─► TEST-013: Invalid Document ID 404 Handling
+  ├─► TEST-014: Source File Read-Only Integrity Check
+  ├─► TEST-015: GET /api/health Regression
+  └─► TEST-016: POST /api/documents/upload Regression
 ```

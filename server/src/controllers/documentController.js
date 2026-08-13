@@ -59,6 +59,7 @@ const parseDocument = async (req, res, next) => {
         id: u.id,
         type: u.type,
         textLength: u.text.length,
+        runCount: u.runs ? u.runs.length : 0,
         location: u.location,
         previewSnippet: u.text.length > 60 ? `${u.text.substring(0, 60)}...` : u.text
       }));
@@ -70,6 +71,7 @@ const parseDocument = async (req, res, next) => {
         documentId: structuredDoc.documentId,
         sourceFile: structuredDoc.sourceFile,
         metrics: structuredDoc.metrics,
+        offsetConvention: structuredDoc.offsetConvention,
         preview: previewUnits
       }
     });

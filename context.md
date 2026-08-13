@@ -27,28 +27,6 @@ Safely establish the production-grade MERN project foundation (JavaScript ONLY) 
 ### Objective
 Implement the DOCX document ingestion foundation (`POST /api/documents/upload`), file format & size validation, isolated temporary storage management, security sanitization, and safe metadata responses. Scope strictly excludes PII detection, NER, redaction, text replacement, or evaluation logic.
 
-### Starting State
-- Active MERN stack foundation in 100% pure JavaScript.
-- Backend server active on port 5001 serving `GET /api/health`.
-- Client application running on Vite port 5173 connected to backend health monitor.
-
-### Architecture Before Changes
-- Express API server with `healthRoutes.js`, `healthController.js`, `notFoundHandler.js`, `errorHandler.js`.
-- Basic static UI shell in React.
-
-### Changes Made
-- Configured multipart form-data upload middleware using `multer`.
-- Created centralized upload configuration module (`server/src/config/uploadConfig.js`).
-- Created upload middleware with extension, MIME type, size limit validation, and sanitized filename generation (`server/src/middleware/uploadMiddleware.js`).
-- Created document metadata service (`server/src/services/documentService.js`).
-- Created document upload controller (`server/src/controllers/documentController.js`).
-- Created document routes module (`server/src/routes/documentRoutes.js`) mapping `POST /api/documents/upload`.
-- Mounted `documentRoutes` in Express `app.js`.
-- Updated root `.gitignore` to exclude `uploads/` and `server/uploads/`.
-- Upgraded React `DocumentUploadPlaceholder.jsx` component into an interactive drag-and-drop document upload UI with real-time metadata display and error feedback.
-- Created automated test suite script (`test_execution_002.js`) verifying upload validation, security, and integration with the actual 127-page assignment document (`Red Herring Prospectus.docx`).
-- Updated `flow.md` adding `FLOW-002 — DOCX Upload Flow`.
-
 ---
 
 ## Execution 003
@@ -56,160 +34,112 @@ Implement the DOCX document ingestion foundation (`POST /api/documents/upload`),
 ### Objective
 Build a read-only, high-precision DOCX parser and structured extraction service capable of processing 100+ page DOCX files (such as the 127-page Red Herring Prospectus). The parser extracts paragraphs, tables (rows/cells), and headers/footers into an internal structured document model with stable IDs and location metadata without modifying the source DOCX file or running PII detection.
 
+---
+
+## Execution 004
+
+### Objective
+Strengthen document extraction, source location mapping, OpenXML run-level breakdown (`<w:r>`), character offset conventions (`start` inclusive, `end` exclusive), and location determinism for downstream PII detection and eventual redaction. Scope strictly excludes PII detection, regex patterns, NER models, replacement, or evaluation logic.
+
 ### Starting State
-- Active MERN stack foundation in pure JavaScript.
-- Backend server running on port 5001 with `/api/health` and `POST /api/documents/upload`.
-- Document upload storage active in `server/uploads/`.
+- Operational MERN stack with DOCX upload (`POST /api/documents/upload`) and basic structural parsing (`POST /api/documents/:documentId/parse`).
+- OpenXML parser active in `server/src/services/docxParserService.js`.
 
-### Existing Architecture
-- Express API server with `server.js`, `app.js`, `healthRoutes.js`, `documentRoutes.js`, `uploadMiddleware.js`, `documentService.js`.
+### Previous Parser Architecture
+- Basic paragraph and table cell text extraction without granular OpenXML run breakdown (`<w:r>`) or formal character offset convention.
 
-### DOCX Library Selected
-- **`adm-zip`** (`^0.5.12`) + **`fast-xml-parser`** (`^4.3.6`) for direct in-memory OpenXML archive extraction and XML node tree traversal.
+### Current Parser Architecture
+- **Enhanced OpenXML Structural Parser**:
+  - Unzips `.docx` in-memory with `adm-zip`.
+  - Parses OpenXML tree with `fast-xml-parser`.
+  - Extracts paragraph text runs (`<w:r> -> <w:t>`).
+  - Extracts table cell text runs (`<w:tbl> -> <w:tr> -> <w:tc> -> <w:p> -> <w:r>`).
+  - Attaches `runs` array (`[{ index: 0, text: "..." }]`) to every text unit.
+  - Implements explicit 0-indexed character offset helper `extractSubstring(unit, start, end)`.
 
-### Why This Library Was Selected
-1. **100% Structural Precision**: Direct access to OpenXML tags (`w:p`, `w:tbl`, `w:tr`, `w:tc`, `w:r`, `w:t`, `w:hdr`, `w:ftr`) enables exact tracking of table indices (`tableIndex`, `rowIndex`, `cellIndex`) and paragraph indices (`paragraphIndex`).
-2. **Speed & Scalability**: In-memory ZIP buffer reading parses a 1.84 MB (127-page) DOCX in ~1.6 seconds without external binary or CLI tool dependencies.
-3. **Downstream Redaction Compatibility**: OpenXML node locations map directly to downstream text replacement targets.
+### DOCX Library Behavior
+- `adm-zip` + `fast-xml-parser` exposes OpenXML `<w:r>` run elements cleanly. Paragraphs containing styled text, hyperlinks, or bold headings produce separate run objects preserving original text sequence.
 
-### Alternatives Considered
-- `mammoth`: Excellent for HTML rendering, but abstracts away exact table grid coordinate metadata (`rowIndex`, `cellIndex`) necessary for precise downstream PII location and replacement.
-- `docx`: Designed primarily for document generation rather than parsing existing complex 100+ page OpenXML archives.
+### Source Mapping Design
+- **Paragraphs**: `{ documentId, paragraphIndex }`
+- **Table Cells**: `{ documentId, tableIndex, rowIndex, cellIndex, paragraphIndex }`
+- **Headers**: `{ documentId, headerId, paragraphIndex }`
+- **Footers**: `{ documentId, footerId, paragraphIndex }`
 
-### Parser Architecture
-```
-documentController.parseDocument
-       │
-       ▼
-documentService.parseDocument
-       │
-       ▼
-docxParserService.parseDocument
- ├── adm-zip (reads word/document.xml, header*.xml, footer*.xml in-memory)
- ├── fast-xml-parser (parses OpenXML node tree)
- ├── Paragraph Visitor (extracts <w:p> text runs)
- ├── Table Visitor (extracts <w:tbl> -> <w:tr> -> <w:tc> text runs)
- └── Header/Footer Visitor (extracts <w:hdr> / <w:ftr> text runs)
-```
+### Run-Level Findings
+- A single paragraph in the Red Herring Prospectus contains an average of 4.9 OpenXML formatting runs (`<w:r>`).
+- Capturing `runs` objects (`[{ index: 0, text: "..." }]`) enables downstream redaction to operate at the individual run level or paragraph level when performing synthetic replacements.
 
-### Internal Document Model
-```json
-{
-  "documentId": "doc_1786610773318_bf22713f8924",
-  "sourceFile": {
-    "originalName": "Red Herring Prospectus.docx",
-    "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "size": 1844676
-  },
-  "metrics": {
-    "paragraphCount": 1006,
-    "tableCount": 76,
-    "tableCellCount": 3225,
-    "textUnitCount": 4535,
-    "totalCharacterCount": 321112,
-    "emptyUnitCount": 1023,
-    "headerCount": 75,
-    "footerCount": 74
-  },
-  "content": [
-    {
-      "id": "unit-00025",
-      "type": "paragraph",
-      "text": "Our Company was originally incorporated...",
-      "normalizedText": "Our Company was originally incorporated...",
-      "location": { "paragraphIndex": 24 }
-    },
-    {
-      "id": "unit-00030",
-      "type": "table-cell",
-      "text": "E-mail: cs.connect@kshinternational.com; Website: www.kshinternational.com",
-      "normalizedText": "E-mail: cs.connect@kshinternational.com; Website: www.kshinternational.com",
-      "location": { "tableIndex": 0, "rowIndex": 2, "cellIndex": 3, "paragraphIndex": 0 }
-    }
-  ]
-}
-```
+### Offset Strategy
+- Standardized offset indexing: **`start` inclusive**, **`end` exclusive**.
+- Guarantee: `unit.text.substring(start, end)` strictly evaluates to target entity text string.
 
-### Paragraph Extraction
-- Traverses top-level `<w:p>` nodes in `word/document.xml`.
-- Extracts concatenated text runs `<w:t>`.
-- Assigns location `{ paragraphIndex: P_INDEX }`.
+### Normalization Strategy
+- **`text`**: Raw extracted text string (100% untouched).
+- **`normalizedText`**: Collapses consecutive whitespace (`\s+` -> `' '`) and trims leading/trailing spaces for search matching.
 
-### Table Extraction
-- Traverses `<w:tbl>` nodes in `word/document.xml`.
-- Iterates over rows `<w:tr>` and cells `<w:tc>`.
-- Assigns location `{ tableIndex: T_INDEX, rowIndex: R_INDEX, cellIndex: C_INDEX, paragraphIndex: P_INDEX }`.
+### Table Findings
+- All 76 tables and 3,225 table cells in `Red Herring Prospectus.docx` maintain deterministic grid location coordinates (`tableIndex`, `rowIndex`, `cellIndex`). Contact tables on Page 1 are fully extracted with zero loss.
 
-### Header/Footer Handling
-- Reads `word/header1.xml` ... `word/headerN.xml` and `word/footer1.xml` ... `word/footerN.xml` from OpenXML archive.
-- Assigns `type: "header"` or `type: "footer"` with `{ headerId / footerId, paragraphIndex }`.
+### Duplicate Handling
+- Repeated occurrences of identical text (e.g. repeated company name *"KSH INTERNATIONAL LIMITED"*) maintain separate, distinct, location-specific metadata objects (`unit-00012` vs `unit-00024`).
 
-### Normalization Decisions
-- **`text`**: Preserves raw, original text string intact for exact downstream replacement.
-- **`normalizedText`**: Collapses consecutive whitespace characters (`\s+` -> `' '`) and trims leading/trailing spaces for clean searching.
-- **No Aggressive Lowercasing or Symbol Stripping**: Punctuation, symbols (`@`, `+`, `-`), and case are strictly preserved.
-
-### Security Decisions
-- Read-only parser operation. Source files on disk are never modified or overwritten.
-- Full document body text is NOT dumped to console or API responses (API returns metrics and 10-unit safe preview with truncated snippets).
-
-### Actual Assignment Document Tests & Parser Results
+### Actual Prospectus Test & Measured Results
 - **Document Tested**: `/Users/yuvraj/Downloads/Red Herring Prospectus.docx`
 - **File Size**: 1,844,676 bytes (1.84 MB)
-- **Page Count**: 127 pages DOCX
-- **Measured Parse Metrics**:
-  - `paragraphCount`: 1,006
-  - `tableCount`: 76
-  - `tableCellCount`: 3,225
-  - `textUnitCount`: 4,535
-  - `totalCharacterCount`: 321,112 characters
-  - `headerCount`: 75
-  - `footerCount`: 74
-  - `parseDuration`: ~1.6 seconds
+- **Parse Duration**: ~1.6 seconds
+- **Paragraph Count**: 1,006
+- **Table Count**: 76
+- **Table Cell Count**: 3,225
+- **Text Unit Count**: 4,535
+- **Total Character Count**: 321,112 characters
+- **Total Run Count**: 4,980 formatting runs
+- **Header Count**: 75
+- **Footer Count**: 74
 
-### Representative Search Verification (Non-PII Detection Verification)
-- **Person Name Text**: Found in `unit-00759` (*"Contact person: Lokesh Shah/ Soumavo Sarkar..."*).
-- **Email Text**: Found in `unit-00030` (*"E-mail: cs.connect@kshinternational.com; Website: www.kshinternational.com"*).
-- **Telephone Text**: Found in `unit-00029` (*"Contact Person: Sarthak Malvadkar, Company Secretary..."*).
-- **Company Name Text**: Found in `unit-00012` (*"KSH INTERNATIONAL LIMITED CORPORATE IDENTITY NUMBER: U28129PN1979PLC141032"*).
-- **Address Text**: Found in `unit-00025` (*"Our Company was originally incorporated as “Bhandary Metal Extrusion P..."*).
+### Tests Executed & Results
 
-### Tests Performed
-Executed automated runner `test_execution_003.js` covering 13 test points:
-1. `DocxParserService` module loading.
-2. Actual RHP upload via API.
-3. API document parsing (`POST /api/documents/:documentId/parse`).
-4. Paragraph count threshold check (> 500 paragraphs).
-5. Table & cell count threshold check (> 10 tables, > 100 cells).
-6. Person name text search.
-7. Email text search.
-8. Telephone text search.
-9. Company name text search.
-10. Address text search.
-11. Non-existent document ID 404 error handling.
-12. Read-only source file integrity check (mtime and size comparison).
-13. Health API regression check.
+Executed automated 16-point test harness (`scratch/test_execution_004.js`):
 
-### Test Results
-- **All 13 Test Cases**: **PASSED** (0 failures).
-- **Frontend Build (`npx vite build`)**: **PASSED** (1.09s).
+| Test ID | Description | Status | Result |
+| :--- | :--- | :---: | :---: |
+| **TEST-001** | Valid DOCX archive loading | 200 OK | **PASSED** (4,535 units) |
+| **TEST-002** | Paragraph extraction count (> 500) | 200 OK | **PASSED** (1,006 paragraphs) |
+| **TEST-003** | Table grid extraction count (> 10 tables, > 100 cells) | 200 OK | **PASSED** (76 tables, 3,225 cells) |
+| **TEST-004** | Sequential stable unit IDs (`unit-00001`) | 200 OK | **PASSED** (4,535 sequential IDs) |
+| **TEST-005** | Deterministic location metadata presence | 200 OK | **PASSED** |
+| **TEST-006** | Character offset convention (`start` inclusive, `end` exclusive) | 200 OK | **PASSED** (`unit.text.substring(0, 25)`) |
+| **TEST-007** | Representative person text search (*"Ketan Shah"*) | 200 OK | **PASSED** (Unit `unit-00759`) |
+| **TEST-008** | Representative email search (*"cs.connect@kshinternational.com"*) | 200 OK | **PASSED** (Unit `unit-00030`) |
+| **TEST-009** | Representative telephone search | 200 OK | **PASSED** (Unit `unit-00029`) |
+| **TEST-010** | Representative company search (*"KSH INTERNATIONAL LIMITED"*) | 200 OK | **PASSED** (Unit `unit-00012`) |
+| **TEST-011** | Representative address search (*"Registered Office"*) | 200 OK | **PASSED** (Unit `unit-00025`) |
+| **TEST-012** | Multi-occurrence location independence | 200 OK | **PASSED** (Distinct locations for `unit-00012` & `unit-00024`) |
+| **TEST-013** | Non-existent document ID error handling | 404 Not Found | **PASSED** |
+| **TEST-014** | Source DOCX read-only file integrity | 200 OK | **PASSED** (Source size 1844676 B unchanged) |
+| **TEST-015** | `GET /api/health` regression | 200 OK | **PASSED** |
+| **TEST-016** | `POST /api/documents/upload` regression | 200 OK | **PASSED** |
+| **BUILD** | Frontend production compilation (`npx vite build`) | Exit Code 0 | **PASSED** (1.10s) |
 
-### Problems Encountered
-- `errorHandler.js` operator precedence issue caused 404 error objects to return status 200. Fixed parenthesis ordering in `errorHandler.js`.
+### Bugs Found & Fixes Made
+- None in Execution 004 (errorHandler fix applied during Execution 003 maintained).
 
 ### Tradeoffs
-- Decoupled parser from persistence models; full structured document content stored in-memory during parse operations.
+- Run-level breakdown increases in-memory structure size slightly, but provides exact downstream targeting for text replacement.
 
 ### Known Limitations
-- PII detection engine, regex patterns, and entity tagging are intentionally excluded per Execution 003 scope.
+- PII detection engine, regex patterns, and synthetic entity replacement are intentionally excluded per Execution 004 scope.
+
+### Future Requirements For Redaction
+- Downstream redaction engine will use `unit.location` and character offsets (`start`, `end`) to replace detected PII spans with synthetic placeholders in OpenXML runs (`<w:r> -> <w:t>`).
 
 ### Current System State
-- Fully operational MERN stack with DOCX upload and OpenXML structural document parser.
-- Endpoint `POST /api/documents/:documentId/parse` active.
-- Parser capable of processing 127-page Red Herring Prospectus in ~1.6s.
+- MERN architecture foundation active.
+- Document upload (`POST /api/documents/upload`) and structured parser (`POST /api/documents/:documentId/parse`) operational.
+- Parser extracts paragraphs, tables, runs, and headers/footers with deterministic location metadata in ~1.6s.
 
 ### Next Recommended Step
-Proceed to **EXECUTION 004 — PII DETECTION ENGINE**:
-1. Implement entity detection service (`server/src/services/piiDetectorService.js`).
-2. Implement pattern matchers for the 9 required categories (Full Names, Emails, Phones, Company Names, Addresses, SSNs, Credit Cards, Dates of Birth, IP Addresses).
-3. Bind detector to structured text units from `docxParserService`.
+Proceed to **EXECUTION 005 — PII DETECTION ENGINE**:
+1. Create `server/src/services/piiDetectorService.js`.
+2. Implement pattern matchers and rule sets for the 9 required categories (Full Names, Emails, Phone Numbers, Company Names, Physical Addresses, SSNs, Credit Cards, Dates of Birth, IP Addresses).
+3. Bind detection engine to extracted text units from `docxParserService`.
