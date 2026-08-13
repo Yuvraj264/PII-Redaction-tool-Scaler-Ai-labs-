@@ -20,12 +20,12 @@ export default function DetectionSummaryCards({ summary, totalEntitiesDetected }
     <div className="detection-summary-panel">
       <div className="summary-header">
         <div>
-          <h3 className="section-title">PII Detection Summary</h3>
-          <p className="section-subtitle">Aggregate PII entities detected across 9 supported categories</p>
+          <h3 className="section-title">PII Candidates Summary</h3>
+          <p className="section-subtitle">Aggregate candidate entity spans detected across 9 supported categories</p>
         </div>
         <div className="total-badge">
           <span className="total-count">{totalEntitiesDetected || 0}</span>
-          <span className="total-label">Total Entities Detected</span>
+          <span className="total-label">PII Candidates Detected</span>
         </div>
       </div>
 

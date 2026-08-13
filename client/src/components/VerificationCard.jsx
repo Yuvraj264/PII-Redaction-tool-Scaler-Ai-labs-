@@ -56,7 +56,7 @@ export default function VerificationCard({ verificationReport, redactionSummary 
         <div className="redaction-metrics-row">
           <div className="metric-chip">
             <CheckCircle size={14} />
-            <span>Entities Detected: <strong>{redactionSummary.totalReplacementsApplied || 0}</strong></span>
+            <span>OpenXML Run Replacements Applied: <strong>{redactionSummary.totalReplacementsApplied || 0}</strong></span>
           </div>
           <div className="metric-chip">
             <CheckCircle size={14} />
