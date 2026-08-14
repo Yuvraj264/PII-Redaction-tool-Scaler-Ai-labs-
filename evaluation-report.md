@@ -1,248 +1,201 @@
-# Formal PII Evaluation Report
-
-**Document Title**: Formal Evaluation & Baseline Comparison Report  
-**Detector Version**: `1.0.0-final` (Frozen)  
-**Evaluation Engine Version**: `1.0`  
-**Dataset Version**: `1.0` (`prospectus_gold_dataset.json`)  
-**Evaluation Scope**: **PARTIAL DATASET EVALUATION** (8 ground-truth annotations)  
-**Target Document**: `Red Herring Prospectus.docx` (127 pages, 4,535 text units)  
-**Source SHA-256 Checksum**: `8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929`  
-**Final Acceptance Decision**: **`READY_FOR_FINAL_REPORT`**
+# PII REDACTION TOOL
+## Evaluation Strategy & Metrics Report
 
 ---
 
-## 1. Executive Summary
+### 1. Evaluation Objective
 
-This report documents the formal evaluation of the **PII Redaction Tool** against the validated ground-truth annotation dataset (`prospectus_gold_dataset.json`) for the 127-page `Red Herring Prospectus.docx`.
+The evaluation measures how effectively the PII Redaction Tool detects and redacts personally identifiable information while minimizing incorrect redactions.
 
-Following evidence-based detector tuning in Execution 014 and formal freeze in Execution 015, the PII detector engine achieved **100.0% Entity Recall** across all evaluated ground-truth PII annotations (0 False Negatives), while eliminating 409 candidate false positives compared to baseline. Post-redaction safety verification confirmed **0 residual PII leaks** in the output DOCX.
-
-### Key Headline Benchmarks
-- **Entity Micro Recall**: **100.0%** (8 / 8 True Positives, 0 False Negatives)
-- **Character-Level Recall**: **100.0%** (99 / 99 PII characters)
-- **Character-Level Accuracy**: **90.55%**
-- **False Negative Reduction**: **-100%** (Reduced from 3 to 0 FNs)
-- **False Positive Reduction**: **-20.36%** (Reduced from 2,009 to 1,600 FPs)
-- **Post-Redaction Confirmed Leaks**: **0** (Status: **PASS**)
-- **Source File Immutability**: Verified SHA-256 match BEFORE === AFTER (**PASSED**)
-
-> [!IMPORTANT]
-> **Metric Honesty Statement**: These metrics represent performance evaluated against the validated gold-covered subset of 8 ground-truth annotations in `Red Herring Prospectus.docx`. They represent the validated subset and should not be presented as unverified full-document performance.
+The evaluation focuses on:
+- Detection coverage
+- Precision
+- Recall
+- F1-score
+- Character-level accuracy
+- Leakage verification
+- Per-PII-type performance
 
 ---
 
-## 2. Evaluation Objective
+### 2. Evaluation Dataset
 
-The evaluation engine measures two primary operational requirements:
-1. **Recall (Safety Goal)**: Did the detector successfully capture 100% of sensitive PII entities? Missing genuine PII (False Negative) results in data privacy leakage in redacted files.
-2. **Precision (Usability Goal)**: Did the detector avoid incorrectly redacting non-PII corporate/legal text? Excess false positives disrupt document readability.
+**Primary document**: `Red Herring Prospectus.docx`
 
----
+The available gold annotations represent a validated subset of the document. Therefore, the prospectus evaluation is reported as a **PARTIAL DATASET EVALUATION**.
 
-## 3. Dataset Details
-
-- **Target Document**: `Red Herring Prospectus.docx` (1.76 MB, 127 pages)
-- **Parsed Text Units**: 4,535 text units (paragraphs, table cells, headers, footers)
-- **Ground-Truth Annotations**: 8 verified annotations (`prospectus_gold_dataset.json`)
-- **Category Distribution**:
-  - `ORGANIZATION`: 3 annotations (`“Bhandary Metal Extrusion Private Limited”`, `“KSH International Private Limited”`, `“KSH International Limited”`)
-  - `EMAIL`: 3 annotations (`"cs.connect@kshinternational.com"`, `"ksh@icicisecurities.com"`, `"customercare@icicisecurities.com"`)
-  - `PERSON`: 1 annotation (`"Sarthak Malvadkar"`)
-  - `PHONE`: 1 annotation (`"+91 22 6807 7100"`)
+Predictions outside the validated gold coverage are not treated as confirmed false positives unless they fall within an annotated evaluation region.
 
 ---
 
-## 4. Annotation Method
+### 3. PII Categories
 
-Ground-truth annotations were constructed via dual candidate generation followed by human expert verification:
-1. Text units were extracted with stable unit IDs (`unit-00025`, `unit-00029`, `unit-00030`, `unit-00763`).
-2. Exact character start offsets (`start` inclusive) and end offsets (`end` exclusive) were verified against `unit.text.substring(start, end)`.
-3. Annotations were locked with SHA-256 source document hash binding.
-
----
-
-## 5. Matching Method
-
-Matches are classified using strict span boundary and character mask projection rules:
-- **Exact Match (`TP`)**: `pred.unitId === gold.unitId && pred.start === gold.start && pred.end === gold.end && pred.type === gold.type`.
-- **False Positive (`FP`)**: Candidate prediction emitted by model not present in gold annotations.
-- **False Negative (`FN`)**: Gold annotation missing from model predictions.
-- **Partial Match**: Overlapping span boundaries (`max(start) < min(end)`) with mismatching offsets.
-- **Wrong Type**: Identical span boundaries with mismatching PII entity category.
+The system supports 9 PII categories:
+- `PERSON`
+- `EMAIL`
+- `PHONE`
+- `ORGANIZATION`
+- `ADDRESS`
+- `DOB`
+- `SSN`
+- `CREDIT_CARD`
+- `IP_ADDRESS`
 
 ---
 
-## 6. Metric Definitions
+### 4. Evaluation Method
 
-$$\text{Precision} = \frac{\text{TP}}{\text{TP} + \text{FP}}$$
+The pipeline sequence:
 
-$$\text{Recall} = \frac{\text{TP}}{\text{TP} + \text{FN}}$$
-
-$$\text{F1-Score} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$$
-
-$$\text{Character Accuracy} = \frac{\text{TP}_{\text{char}} + \text{TN}_{\text{char}}}{\text{TP}_{\text{char}} + \text{TN}_{\text{char}} + \text{FP}_{\text{char}} + \text{FN}_{\text{char}}}$$
-
----
-
-## 7. Baseline Results (Execution 013)
-
-| Metric | Result |
-| :--- | :---: |
-| **True Positives (`TP`)** | 5 |
-| **False Positives (`FP`)** | 2,009 |
-| **False Negatives (`FN`)** | 3 |
-| **Entity Micro Recall** | **62.50%** |
-| **Entity Micro Precision** | 0.25% |
-| **Entity Micro F1-Score** | 0.0050 |
-| **Character-Level Recall** | 79.84% |
-| **Character-Level Accuracy** | 97.68% |
-
-- **Baseline Breakdown**: Had 0.0% ORGANIZATION Recall (3 FNs) because unicode quotation marks captured in candidate spans shifted character offsets by +1.
-
----
-
-## 8. Final Results (Execution 015 Benchmark)
-
-| Metric | Result |
-| :--- | :---: |
-| **True Positives (`TP`)** | **8 / 8** |
-| **False Positives (`FP`)** | **1,600** |
-| **False Negatives (`FN`)** | **0** |
-| **Entity Micro Recall** | **100.0%** |
-| **Entity Micro Precision** | **0.50%** |
-| **Entity Micro F1-Score** | **0.0099** |
-| **Character-Level Recall** | **100.0%** |
-| **Character-Level Accuracy** | **90.55%** |
-
----
-
-## 9. Baseline vs Final Comparison
-
-| Evaluation Metric | Baseline (Execution 013) | Final (Execution 015) | Absolute Change | Impact |
-| :--- | :---: | :---: | :---: | :--- |
-| **True Positives (`TP`)** | 5 | **8** | **+3** | Improved |
-| **False Positives (`FP`)** | 2,009 | **1,600** | **-409** | Improved (-409 FPs) |
-| **False Negatives (`FN`)** | 3 | **0** | **-3** | Eliminated (0 FNs) |
-| **Entity Micro Recall** | 62.50% | **100.00%** | **+37.50%** | **100.0% Recall** |
-| **Entity Micro Precision** | 0.25% | **0.50%** | **+0.25%** | Doubled |
-| **Character-Level Recall** | 79.84% | **100.00%** | **+20.16%** | **100.0% Recall** |
-
----
-
-## 10. Type Confusion Matrix ($10 \times 10$)
-
-```text
-               Pred: PERSON  EMAIL  PHONE  ORG  ADDR  DOB  SSN  CC  IP  NONE(FN)
-Gold: PERSON        1        0      0      0    0     0    0   0   0   0
-Gold: EMAIL         0        3      0      0    0     0    0   0   0   0
-Gold: PHONE         0        0      1      0    0     0    0   0   0   0
-Gold: ORG           0        0      0      3    0     0    0   0   0   0
-Gold: ADDR          0        0      0      0    0     0    0   0   0   0
-Gold: DOB           0        0      0      0    0     0    0   0   0   0
-Gold: SSN           0        0      0      0    0     0    0   0   0   0
-Gold: CC            0        0      0      0    0     0    0   0   0   0
-Gold: IP            0        0      0      0    0     0    0   0   0   0
-NONE(FP):        1049       49     11    478   13     0    0   0   0   -
+```
+DOCX
+  ↓
+Text Extraction
+  ↓
+PII Detection
+  ↓
+Normalization
+  ↓
+Deduplication
+  ↓
+Gold Matching
+  ↓
+TP / FP / FN
+  ↓
+Precision / Recall / F1
+  ↓
+Redaction
+  ↓
+Leakage Verification
 ```
 
 ---
 
-## 11. False Positive Analysis
+### 5. Entity Matching
 
-- **PERSON FPs (1,049)**: Capitalized section titles (`BOARD OF DIRECTORS`, `REGISTERED OFFICE`) matched capitalization NLP rules (Mitigated via header unit suppression).
-- **ORGANIZATION FPs (478)**: Generic corporate terms in legal prospectus text containing `Limited` or `Private` (Reduced by 1,003 FPs from 1,481 baseline).
-- **PHONE FPs (11)**: Surrounding telephone text references (Reduced by 52% from 23 baseline).
+A predicted entity is matched against the gold annotation using:
+- PII type
+- normalized value
+- document position/span where applicable
 
----
-
-## 12. False Negative Analysis
-
-- **Execution 015 FNs**: **0 False Negatives**. All 8 ground-truth gold annotations were detected with 100% exact span matching.
+Normalization is used for comparison only and does not modify the original document.
 
 ---
 
-## 13. Wrong-Type Analysis
+### 6. Metrics
 
-- **0 Wrong-Type Errors**: All true positives matched their expected PII category perfectly.
+#### Precision
+$$\text{Precision} = \frac{\text{TP}}{\text{TP} + \text{FP}}$$
+Precision measures how many predicted PII entities are actually correct.
 
----
+#### Recall
+$$\text{Recall} = \frac{\text{TP}}{\text{TP} + \text{FN}}$$
+Recall measures how many gold PII entities were successfully detected.
 
-## 14. Partial Match Analysis
+#### F1-score
+$$\text{F1} = \frac{2 \times \text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$$
+F1 provides a combined measure of precision and recall.
 
-- **0 Partial Match Errors**: All true positives matched exact character offset boundaries (`start` and `end`).
+#### Character-Level Accuracy
+Character-level accuracy measures the proportion of evaluated text units that are correctly classified as PII/non-PII.
 
----
-
-## 15. PII-Type Performance Analysis
-
-### PERSON
-- Gold: 1 (`"Sarthak Malvadkar"`) | TP: 1 | FN: 0 | FP: 1,049 | Recall: **100.0%**
-
-### EMAIL
-- Gold: 3 (`"cs.connect@kshinternational.com"`, etc.) | TP: 3 | FN: 0 | FP: 49 | Recall: **100.0%**
-
-### PHONE
-- Gold: 1 (`"+91 22 6807 7100"`) | TP: 1 | FN: 0 | FP: 11 | Recall: **100.0%**
-
-### ORGANIZATION
-- Gold: 3 (`"Bhandary Metal Extrusion Private Limited"`, etc.) | TP: 3 | FN: 0 | FP: 478 | Recall: **100.0%**
+This metric is reported separately from entity-level precision and recall because a high character-level accuracy does not necessarily mean high PII detection precision.
 
 ---
 
-## 16. Detector Strategy Comparison
+### 7. Leakage Verification
 
-| Strategy | PII Types | Strengths | Weaknesses |
-| :--- | :--- | :--- | :--- |
-| **Deterministic Regex / Luhn** | EMAIL, PHONE, IP, SSN, CREDIT_CARD | Fast, 100% reproducible, zero false negatives on structured formats | Fails on variable-length names |
-| **Contextual NLP & Allowlist** | PERSON, ORGANIZATION, ADDRESS, DOB | Captures context-dependent names and corporate entities | Generates candidate false positives in legal text |
+After redaction, the generated DOCX is scanned against the original PII values.
 
----
+The objective is to verify that original PII values are not still present in the redacted document.
 
-## 17. Redaction Verification & Structural Preservation
-
-- **OpenXML DOCX Redaction**: Applied 1,729 in-place text replacements cleanly.
-- **Structural Preservation**:
-  - Original vs Redacted Paragraphs: 1,006 / 1,006 (100% match)
-  - Original vs Redacted Tables: 0 / 0 table errors
-- **Post-Redaction Leakage Rescan**: **0 Confirmed Leaks** (Verification Status: **PASS**).
+The leakage check distinguishes original PII from expected synthetic replacement values.
 
 ---
 
-## 18. Source Integrity
+### 8. Current Evaluation Results
 
-- **Source Document SHA-256 Checksum BEFORE**: `8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929`
-- **Source Document SHA-256 Checksum AFTER**: `8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929`
-- **Verification Result**: **100% IMMUTABLE & UNTOUCHED**
+#### Prospectus Evaluation:
+- **True Positives (TP)**: 8
+- **False Negatives (FN)**: 0
+- **False Positives (FP)**: 1,600 (Baseline Frozen Benchmark Scope)
 
----
+- **Entity Micro Recall**: **100.00%**
+- **Entity Micro Precision**: **0.50%**
+- **Entity Micro F1**: **0.0099**
 
-## 19. Reproducibility
+- **Character-Level Accuracy**: **90.55%**
 
-Executing the final evaluation runner (`node server/tests/test_execution_015.js`) twice produced 100% identical prediction counts (1,608), true positive counts (8), and recall metrics (100.0%).
-
----
-
-## 20. Performance Benchmark Breakdown
-
-- **Parsing Time**: 82 ms
-- **Detection Time**: 1,215 ms
-- **Validation Time**: 14 ms
-- **Evaluation Engine Time**: 18 ms
-- **OpenXML Redaction Time**: 11,850 ms
-- **Post-Redaction Leakage Scan Time**: 540 ms
-- **Total End-to-End Pipeline Execution Time**: 13,719 ms
+> [!IMPORTANT]
+> **Metric Disclaimer**: These metrics represent the validated gold-covered subset and should not be interpreted as full-document ground-truth metrics.
 
 ---
 
-## 21. Limitations & Scope Constraints
+### 9. Per-Type Results
 
-1. Evaluation metrics represent the validated gold-covered subset of 8 ground-truth annotations in `Red Herring Prospectus.docx`.
-2. Candidate false positives remain present on capitalized corporate legal headings.
+| PII Category | Gold Count | True Positives (TP) | False Positives (FP) | Recall | Precision |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **PERSON** | 1 | 1 | 1,049 | **100.00%** | 0.10% |
+| **EMAIL** | 3 | 3 | 49 | **100.00%** | 5.77% |
+| **PHONE** | 1 | 1 | 11 | **100.00%** | 8.33% |
+| **ORGANIZATION** | 3 | 3 | 478 | **100.00%** | 0.62% |
+| **ADDRESS** | 0 | 0 | 13 | N/A | N/A |
+| **DOB** | 0 | 0 | 0 | N/A | N/A |
+| **SSN** | 0 | 0 | 0 | N/A | N/A |
+| **CREDIT_CARD** | 0 | 0 | 0 | N/A | N/A |
+| **IP_ADDRESS** | 0 | 0 | 0 | N/A | N/A |
 
 ---
 
-## 22. Conclusion & Quality Gate Approval
+### 10. Redaction Verification
 
-The frozen PII detector engine (`detectorVersion: "1.0.0-final"`) achieved **100.0% Recall** across all evaluated gold annotations, **0 False Negatives**, and **0 Confirmed Leaks** in post-redaction leakage scanning.
+The final redacted DOCX is independently checked after generation.
 
-**Final System Acceptance Status**: **`READY_FOR_FINAL_REPORT`**
+#### Current Leakage Result:
+- **Confirmed Original Leaks**: **0**
+- **Possible Leaks**: **0**
+
+The redacted document is also structurally validated as a DOCX.
+
+---
+
+### 11. Limitations
+
+The primary limitation is partial gold coverage. The prospectus contains many legitimate names, organizations, addresses and contact details that may not be represented in the available gold annotations.
+
+Therefore, predictions outside validated gold coverage should not automatically be interpreted as genuine false positives.
+
+The system's performance on the complete document cannot be claimed without exhaustive ground-truth annotation.
+
+---
+
+### 12. Synthetic Capability Evaluation
+
+A separate synthetic test set is used to verify support for all nine required PII categories:
+1. `PERSON`
+2. `EMAIL`
+3. `PHONE`
+4. `ORGANIZATION`
+5. `ADDRESS`
+6. `DOB`
+7. `SSN`
+8. `CREDIT_CARD`
+9. `IP_ADDRESS`
+
+This capability evaluation is kept separate from the prospectus gold-dataset metrics.
+
+---
+
+### 13. Conclusion
+
+The evaluation combines:
+- gold-annotation entity matching
+- precision
+- recall
+- F1-score
+- character-level accuracy
+- leakage verification
+- per-type analysis
+- synthetic category testing
+
+The evaluation results are reported transparently with the limitations of the available gold dataset.
