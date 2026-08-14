@@ -1,9 +1,24 @@
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 /**
  * Upload Configuration Constants
  * Centralized security rules and limits for document ingestion.
+ * Automatically handles Vercel / serverless ephemeral /tmp storage.
  */
+const defaultDir = process.env.VERCEL || process.env.NODE_ENV === 'production'
+  ? path.join(os.tmpdir(), 'pii-uploads')
+  : path.join(__dirname, '../../uploads');
+
+try {
+  if (!fs.existsSync(defaultDir)) {
+    fs.mkdirSync(defaultDir, { recursive: true });
+  }
+} catch (err) {
+  // Directory fallback
+}
+
 module.exports = {
   // Maximum file size in bytes: 50MB to support large documents (e.g. 127-page RHP)
   MAX_FILE_SIZE: 50 * 1024 * 1024,
@@ -21,5 +36,5 @@ module.exports = {
   ],
   
   // Temporary storage directory path
-  UPLOAD_DIR: path.join(__dirname, '../../uploads')
+  UPLOAD_DIR: defaultDir
 };

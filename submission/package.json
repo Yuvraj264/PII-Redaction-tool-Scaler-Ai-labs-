@@ -1,0 +1,21 @@
+{
+  "name": "pii-redaction-tool",
+  "version": "1.0.0",
+  "description": "Enterprise DOCX PII Redaction Engine & Formal Evaluation System — Scaler AI Labs",
+  "main": "api/index.js",
+  "scripts": {
+    "build": "cd client && npm install && npm run build",
+    "start": "cd server && node server.js",
+    "test": "node server/tests/test_execution_020c.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "adm-zip": "^0.5.16",
+    "@xmldom/xmldom": "^0.8.10",
+    "compromise": "^14.14.0",
+    "mongoose": "^8.5.2",
+    "dotenv": "^16.4.5"
+  }
+}
