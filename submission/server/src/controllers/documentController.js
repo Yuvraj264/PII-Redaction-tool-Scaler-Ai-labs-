@@ -317,17 +317,25 @@ const downloadRedactedDocument = async (req, res, next) => {
     const fs = require('fs');
 
     const docMeta = documentService.getDocumentMetadata(documentId);
-    if (!docMeta) {
-      return res.status(404).json({
-        status: 'error',
-        statusCode: 404,
-        message: `Document '${documentId}' not found.`
-      });
+    let redactedBuffer = null;
+
+    if (global.documentStore.has(documentId)) {
+      const cached = global.documentStore.get(documentId);
+      if (cached && cached.redactedBuffer) {
+        redactedBuffer = cached.redactedBuffer;
+      }
     }
 
-    const redactedFilePath = path.join(path.dirname(docMeta.filePath), `${documentId}_redacted.docx`);
+    if (!redactedBuffer && docMeta && docMeta.filePath) {
+      const redactedFilePath = path.join(path.dirname(docMeta.filePath), `${documentId}_redacted.docx`);
+      if (fs.existsSync(redactedFilePath)) {
+        try {
+          redactedBuffer = fs.readFileSync(redactedFilePath);
+        } catch (e) {}
+      }
+    }
 
-    if (!fs.existsSync(redactedFilePath)) {
+    if (!redactedBuffer || redactedBuffer.length === 0) {
       return res.status(404).json({
         status: 'error',
         statusCode: 404,
@@ -335,25 +343,8 @@ const downloadRedactedDocument = async (req, res, next) => {
       });
     }
 
-    const downloadFileName = `${docMeta.originalName.replace(/\.docx$/i, '')}_redacted.docx`;
-
-    // Atomic pre-download DOCX validation
-    const stats = fs.statSync(redactedFilePath);
-    if (stats.size === 0) {
-      return res.status(500).json({
-        status: 'error',
-        statusCode: 500,
-        message: 'Redacted file is empty (0 bytes).'
-      });
-    }
-
     // Inspect ZIP magic header signature (PK\x03\x04)
-    const buf = Buffer.alloc(4);
-    const fd = fs.openSync(redactedFilePath, 'r');
-    fs.readSync(fd, buf, 0, 4, 0);
-    fs.closeSync(fd);
-
-    if (buf[0] !== 0x50 || buf[1] !== 0x4B || buf[2] !== 0x03 || buf[3] !== 0x04) {
+    if (redactedBuffer[0] !== 0x50 || redactedBuffer[1] !== 0x4B || redactedBuffer[2] !== 0x03 || redactedBuffer[3] !== 0x04) {
       return res.status(500).json({
         status: 'error',
         statusCode: 500,
@@ -363,7 +354,7 @@ const downloadRedactedDocument = async (req, res, next) => {
 
     // Inspect OpenXML ZIP contents
     const AdmZip = require('adm-zip');
-    const zip = new AdmZip(redactedFilePath);
+    const zip = new AdmZip(redactedBuffer);
     const contentTypesEntry = zip.getEntry('[Content_Types].xml');
     const documentXmlEntry = zip.getEntry('word/document.xml');
 
@@ -375,21 +366,13 @@ const downloadRedactedDocument = async (req, res, next) => {
       });
     }
 
-    // Inspect word/document.xml XML DOM parsing
-    const { DOMParser } = require('@xmldom/xmldom');
-    const xmlText = documentXmlEntry.getData().toString('utf8');
-    const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
-    if (!doc || !doc.documentElement || doc.documentElement.nodeName !== 'w:document') {
-      return res.status(500).json({
-        status: 'error',
-        statusCode: 500,
-        message: 'Redacted document.xml failed XML DOM validation.'
-      });
-    }
+    const downloadFileName = docMeta && docMeta.originalName
+      ? `${docMeta.originalName.replace(/\.docx$/i, '')}_redacted.docx`
+      : `${documentId}_redacted.docx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadFileName)}"`);
-    return res.download(redactedFilePath, downloadFileName);
+    return res.send(redactedBuffer);
   } catch (error) {
     next(error);
   }

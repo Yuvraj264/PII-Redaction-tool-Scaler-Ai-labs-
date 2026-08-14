@@ -10,17 +10,18 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 
 // Multer disk storage setup with sanitized unique filenames
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOAD_DIR);
-  },
-  filename: (req, file, cb) => {
-    // Generate safe, collision-resistant random server filename
-    const uniqueSuffix = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
-    const ext = path.extname(file.originalname).toLowerCase() || '.docx';
-    cb(null, `doc_${uniqueSuffix}${ext}`);
-  }
-});
+const storage = (process.env.VERCEL || process.env.NODE_ENV === 'production')
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+      destination: (req, file, cb) => {
+        cb(null, UPLOAD_DIR);
+      },
+      filename: (req, file, cb) => {
+        const uniqueSuffix = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+        const ext = path.extname(file.originalname).toLowerCase() || '.docx';
+        cb(null, `doc_${uniqueSuffix}${ext}`);
+      }
+    });
 
 // Strict file filter enforcing DOCX format & extension
 const fileFilter = (req, file, cb) => {
@@ -81,6 +82,21 @@ const handleUpload = (fieldName) => {
           statusCode: err.statusCode || 400,
           message: err.message || 'File upload failed.'
         });
+      }
+
+      if (req.file && !req.file.filename) {
+        const uniqueSuffix = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+        const ext = path.extname(req.file.originalname).toLowerCase() || '.docx';
+        req.file.filename = `doc_${uniqueSuffix}${ext}`;
+      }
+
+      if (req.file && req.file.buffer && UPLOAD_DIR) {
+        try {
+          if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+          const savePath = path.join(UPLOAD_DIR, req.file.filename);
+          fs.writeFileSync(savePath, req.file.buffer);
+          req.file.path = savePath;
+        } catch (e) {}
       }
 
       next();

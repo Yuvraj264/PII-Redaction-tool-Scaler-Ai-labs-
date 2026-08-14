@@ -4,12 +4,12 @@
   "datasetVersion": "1.0",
   "sourceDocumentHash": "8b5c93f7642d659e64b51be9f6172c86c2825417f376ca1800ed331515e6f929",
   "reportType": "FINAL_EVALUATION_RUN",
-  "timestamp": "2026-08-14T05:54:55.694Z",
+  "timestamp": "2026-08-14T06:05:02.212Z",
   "scope": "PARTIAL DATASET EVALUATION",
   "acceptanceDecision": "READY_FOR_FINAL_REPORT",
   "scopeDetails": {
     "documentId": "doc_1786622697521_f7e04c92f688",
-    "sourceFileName": "doc_1786622697521_f7e04c92f688.docx",
+    "sourceFileName": "Red Herring Prospectus.docx",
     "evaluatedTextUnits": 4535,
     "annotationsCount": 8,
     "predictionsCount": 870

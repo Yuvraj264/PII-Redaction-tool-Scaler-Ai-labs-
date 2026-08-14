@@ -60,8 +60,15 @@ class DocxRedactionService {
       });
     });
 
-    // 2. Load source DOCX zip package into memory
-    const zip = new AdmZip(docMeta.filePath);
+    // 2. Load source DOCX zip package into memory from buffer or filesystem
+    const docBuffer = documentService.getDocumentBuffer(documentId);
+    let zip;
+    try {
+      zip = new AdmZip(docBuffer || docMeta.filePath);
+    } catch (err) {
+      throw new Error(`Failed to open DOCX archive: ${err.message}`);
+    }
+
     const zipEntries = zip.getEntries();
     const docEntry = zipEntries.find(e => e.entryName === 'word/document.xml');
 
@@ -183,10 +190,25 @@ class DocxRedactionService {
       }
     });
 
-    // 6. Save redacted DOCX archive file
+    // 6. Save redacted DOCX archive file to memory and disk
     const redactedFileName = `${documentId}_redacted.docx`;
-    const redactedFilePath = path.join(path.dirname(docMeta.filePath), redactedFileName);
-    zip.writeZip(redactedFilePath);
+    const redactedFilePath = path.join(path.dirname(docMeta.filePath || UPLOAD_DIR), redactedFileName);
+    const redactedBuffer = zip.toBuffer();
+
+    try {
+      zip.writeZip(redactedFilePath);
+    } catch (e) {}
+
+    if (global.documentStore.has(documentId)) {
+      const cached = global.documentStore.get(documentId);
+      cached.redactedBuffer = redactedBuffer;
+      cached.redactedFilePath = redactedFilePath;
+    } else {
+      global.documentStore.set(documentId, {
+        redactedBuffer,
+        redactedFilePath
+      });
+    }
 
     return {
       documentId,

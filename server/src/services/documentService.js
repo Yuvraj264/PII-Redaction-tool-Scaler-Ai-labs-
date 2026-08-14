@@ -3,15 +3,16 @@ const fs = require('fs');
 const docxParserService = require('./docxParserService');
 const { UPLOAD_DIR } = require('../config/uploadConfig');
 
+// Global memory store for Vercel Serverless Function persistence
+global.documentStore = global.documentStore || new Map();
+
 /**
  * Document Service
- * Business logic for file ingestion metadata processing, storage lookup, and structured parsing.
+ * Business logic for file ingestion metadata processing, in-memory & disk storage lookup, and structured parsing.
  */
 class DocumentService {
   /**
-   * Processes uploaded file metadata into a safe JSON payload.
-   * Ensures raw server filesystem paths and document body content are NEVER returned to client.
-   * 
+   * Processes uploaded file metadata into a safe JSON payload and caches binary Buffer.
    * @param {Object} file - Express/Multer file object
    * @returns {Object} Safe document metadata payload
    */
@@ -20,19 +21,38 @@ class DocumentService {
       throw new Error('No document file provided for ingestion.');
     }
 
-    const rawBaseName = path.basename(file.filename, path.extname(file.filename));
+    const filename = file.filename || file.originalname || 'uploaded_doc.docx';
+    const rawBaseName = path.basename(filename, path.extname(filename));
     const documentId = rawBaseName.startsWith('doc_') ? rawBaseName : `doc_${rawBaseName}`;
-    const sanitizedOriginalName = path.basename(file.originalname);
-    const extension = path.extname(file.originalname).toLowerCase() || '.docx';
+    const sanitizedOriginalName = path.basename(file.originalname || 'document.docx');
+    const extension = path.extname(sanitizedOriginalName).toLowerCase() || '.docx';
 
-    return {
+    let fileBuffer = null;
+    if (file.buffer) {
+      fileBuffer = file.buffer;
+    } else if (file.path && fs.existsSync(file.path)) {
+      try {
+        fileBuffer = fs.readFileSync(file.path);
+      } catch (e) {}
+    }
+
+    const metadata = {
       documentId: documentId,
       originalName: sanitizedOriginalName,
-      mimeType: file.mimetype,
-      size: file.size,
+      mimeType: file.mimetype || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      size: file.size || (fileBuffer ? fileBuffer.length : 0),
       extension: extension,
       uploadedAt: new Date().toISOString()
     };
+
+    if (fileBuffer) {
+      global.documentStore.set(documentId, {
+        metadata,
+        buffer: fileBuffer
+      });
+    }
+
+    return metadata;
   }
 
   /**
@@ -43,22 +63,47 @@ class DocumentService {
   findStoredFilePath(documentId) {
     if (!documentId || typeof documentId !== 'string') return null;
 
-    // Sanitize documentId against path traversal
     const safeDocId = path.basename(documentId);
-    
     if (!fs.existsSync(UPLOAD_DIR)) return null;
 
-    const files = fs.readdirSync(UPLOAD_DIR);
-    
-    // Match file whose name starts with safeDocId or matches safeDocId directly
-    const targetFile = files.find(f => {
-      const base = path.basename(f, path.extname(f));
-      return base === safeDocId || f === safeDocId;
-    });
+    try {
+      const files = fs.readdirSync(UPLOAD_DIR);
+      const targetFile = files.find(f => {
+        const base = path.basename(f, path.extname(f));
+        return base === safeDocId || f === safeDocId;
+      });
 
-    if (!targetFile) return null;
+      if (targetFile) {
+        return path.join(UPLOAD_DIR, targetFile);
+      }
+    } catch (e) {
+      return null;
+    }
 
-    return path.join(UPLOAD_DIR, targetFile);
+    return null;
+  }
+
+  /**
+   * Retrieves document Buffer from memory store or disk
+   * @param {string} documentId 
+   * @returns {Buffer|null}
+   */
+  getDocumentBuffer(documentId) {
+    if (global.documentStore.has(documentId)) {
+      const cached = global.documentStore.get(documentId);
+      if (cached && cached.buffer) return cached.buffer;
+    }
+
+    const filePath = this.findStoredFilePath(documentId);
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        return fs.readFileSync(filePath);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -67,32 +112,34 @@ class DocumentService {
    * @returns {Object} Structured document model
    */
   async parseDocument(documentId) {
+    const buffer = this.getDocumentBuffer(documentId);
     const filePath = this.findStoredFilePath(documentId);
 
-    if (!filePath) {
+    if (!buffer && !filePath) {
       const error = new Error(`Document with ID '${documentId}' not found in upload storage.`);
       error.statusCode = 404;
       throw error;
     }
 
-    const stats = fs.statSync(filePath);
     const sourceMeta = {
       originalName: `${documentId}.docx`,
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      size: stats.size
+      size: buffer ? buffer.length : (filePath ? fs.statSync(filePath).size : 0)
     };
 
-    return await docxParserService.parseDocument(filePath, documentId, sourceMeta);
+    return await docxParserService.parseDocument(buffer || filePath, documentId, sourceMeta);
   }
 
   /**
-   * Verifies existence of temporary document file on disk securely.
+   * Verifies existence of temporary document file on disk or memory securely.
    * @param {string} filePath 
    * @returns {boolean}
    */
   verifyFileExists(filePath) {
     try {
-      return fs.existsSync(filePath);
+      if (filePath && fs.existsSync(filePath)) return true;
+      const base = path.basename(filePath, path.extname(filePath)).replace('_redacted', '');
+      return global.documentStore.has(base);
     } catch (error) {
       return false;
     }
@@ -104,6 +151,16 @@ class DocumentService {
    * @returns {Object|null} { documentId, filePath, originalName, size }
    */
   getDocumentMetadata(documentId) {
+    if (global.documentStore.has(documentId)) {
+      const cached = global.documentStore.get(documentId);
+      if (cached && cached.metadata) {
+        return {
+          ...cached.metadata,
+          filePath: this.findStoredFilePath(documentId) || path.join(UPLOAD_DIR, `${documentId}.docx`)
+        };
+      }
+    }
+
     const filePath = this.findStoredFilePath(documentId);
     if (!filePath) return null;
     const stats = fs.statSync(filePath);

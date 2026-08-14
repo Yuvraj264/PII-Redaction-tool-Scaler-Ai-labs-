@@ -42,15 +42,24 @@ class LeakageScanner {
       throw new Error(`[LeakageScanner Error] Original document '${documentId}' not found.`);
     }
 
-    const defaultRedactedPath = path.join(path.dirname(docMeta.filePath), `${documentId}_redacted.docx`);
+    let redactedBuffer = null;
+    if (global.documentStore.has(documentId)) {
+      const cached = global.documentStore.get(documentId);
+      if (cached && cached.redactedBuffer) {
+        redactedBuffer = cached.redactedBuffer;
+      }
+    }
+
+    const defaultRedactedPath = path.join(path.dirname(docMeta.filePath || UPLOAD_DIR), `${documentId}_redacted.docx`);
     const targetRedactedPath = redactedFilePath || defaultRedactedPath;
 
-    if (!fs.existsSync(targetRedactedPath)) {
+    if (!redactedBuffer && !fs.existsSync(targetRedactedPath)) {
       throw new Error(`[LeakageScanner Error] Redacted file '${targetRedactedPath}' does not exist.`);
     }
 
     // 1. Retrieve original document structured parsing metrics
-    const originalStructDoc = await docxParserService.parseDocument(docMeta.filePath, documentId);
+    const origBuffer = documentService.getDocumentBuffer(documentId);
+    const originalStructDoc = await docxParserService.parseDocument(origBuffer || docMeta.filePath, documentId);
 
     // 2. Retrieve original Replacement Plan & entities list
     const originalPlan = await replacementService.generateReplacementPlan(documentId);
@@ -98,7 +107,7 @@ class LeakageScanner {
     let reparsedSuccessfully = true;
 
     try {
-      redactedStructDoc = await docxParserService.parseDocument(targetRedactedPath, `${documentId}_redacted`);
+      redactedStructDoc = await docxParserService.parseDocument(redactedBuffer || targetRedactedPath, `${documentId}_redacted`);
     } catch (err) {
       reparsedSuccessfully = false;
     }

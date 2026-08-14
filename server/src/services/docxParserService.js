@@ -137,21 +137,34 @@ class DocxParserService {
    * @param {Object} sourceFileMeta - Source document metadata
    * @returns {Object} Application-level Structured Document Model
    */
-  async parseDocument(filePath, documentId, sourceFileMeta = {}) {
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`Document file not found at path: ${filePath}`);
-    }
-
-    const stats = fs.statSync(filePath);
-    if (stats.size === 0) {
-      throw new Error('Document file is empty (0 bytes).');
-    }
-
+  async parseDocument(filePathOrBuffer, documentId, sourceFileMeta = {}) {
     let zip;
-    try {
-      zip = new AdmZip(filePath);
-    } catch (err) {
-      throw new Error(`Failed to open DOCX archive: ${err.message}`);
+    let size = 0;
+
+    if (Buffer.isBuffer(filePathOrBuffer)) {
+      size = filePathOrBuffer.length;
+      if (size === 0) {
+        throw new Error('Document buffer is empty (0 bytes).');
+      }
+      try {
+        zip = new AdmZip(filePathOrBuffer);
+      } catch (err) {
+        throw new Error(`Failed to open DOCX archive from buffer: ${err.message}`);
+      }
+    } else {
+      if (!fs.existsSync(filePathOrBuffer)) {
+        throw new Error(`Document file not found at path: ${filePathOrBuffer}`);
+      }
+      const stats = fs.statSync(filePathOrBuffer);
+      if (stats.size === 0) {
+        throw new Error('Document file is empty (0 bytes).');
+      }
+      size = stats.size;
+      try {
+        zip = new AdmZip(filePathOrBuffer);
+      } catch (err) {
+        throw new Error(`Failed to open DOCX archive: ${err.message}`);
+      }
     }
 
     const zipEntries = zip.getEntries();
@@ -301,9 +314,9 @@ class DocxParserService {
     return {
       documentId: documentId,
       sourceFile: {
-        originalName: sourceFileMeta.originalName || path.basename(filePath),
+        originalName: sourceFileMeta.originalName || (typeof filePathOrBuffer === 'string' ? path.basename(filePathOrBuffer) : `${documentId}.docx`),
         mimeType: sourceFileMeta.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        size: sourceFileMeta.size || stats.size
+        size: sourceFileMeta.size || size
       },
       metrics: {
         paragraphCount: paragraphCounter,
